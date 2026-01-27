@@ -1,10 +1,10 @@
 import React from 'react'
 import './Background.css'
 
-const Hero = () => {
+const Background = () => {
   return (
     <div className ="background"></div>
   )
 }
 
-export default Hero
+export default Background
