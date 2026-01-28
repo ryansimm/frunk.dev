@@ -14,13 +14,19 @@ a{
     line-height: 1;
     cursor: pointer; 
 }
+
 .container{
-    padding-left: 10%;
-    padding-right: 10%;
+    padding-left: 15%;
+    padding-right: 15%;
+}
+
+.container-2{
+    padding-left: 5%;
+    padding-right: 5%;
 }
 .button{background: white;
     color: #212121;
-    padding :14px 20px;
+    padding :14px 30px;
     font-size :16px;
     border-radius: 30px;
     cursor : pointer;
@@ -29,4 +35,35 @@ a{
     display : inline-flex;
     align-items: center;
     justify-content: center;
+}
+.button-start {
+    color: #212121;
+    padding :14px 30px;
+    font-size :16px;
+    border-radius: 30px;
+    cursor : pointer;
+    border: 0;
+    outline: 0;
+    display : inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+.button-start:hover .button-text{
+    opacity: 0;
+    
+}
+.button-text{
+    transition: opacity 0.2s ease;
+}
+.flag-icon{
+    position: absolute;
+    top: 50%;
+    transform : translateY(-50%);
+    width : 30px;
+    opacity :0;
+    transition: opacity 0.3s ease;
+}
+.button-start:hover .flag-icon {
+    opacity:1;
 }

@@ -1,5 +1,6 @@
 import React from 'react'
-import './Body.css'
+import './Body.css' 
+import start from '../../assets/start.png'
 
 const Body = () => {
   return (
@@ -9,7 +10,10 @@ const Body = () => {
         <p>In a world where AI is front and centre, coding skills are more importnant that ever.
           The purpose of this space is to help you develop your skills making use of AI without it doing
           the work for you.</p>
-          <button className = 'button'>Explore</button>
+          <button className = 'button-start'>
+            <span className = "button-text">Get Started</span>
+            <img src = {start} alt="chequered flag" className = "flag-icon"/>
+            </button>
       </div>
     </div>
   )

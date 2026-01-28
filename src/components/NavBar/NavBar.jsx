@@ -5,13 +5,9 @@ import logo from '../../assets/logo.png'
 
 const NavBar = () => {
   return (
-    <nav className = "container">
-        <img src = {logo} alt = "University Crest" className = "logo"/>
+    <nav className = "container-2">
+        <img src = {logo} alt = "Logo" className = "logo"/>
         <ul>
-            <li>Home</li>
-            <li>How To Use</li>
-            <li>About AI</li>
-            <li>Programming</li>
             <li><button className="button">Feedback</button></li>
         </ul>
     </nav>
