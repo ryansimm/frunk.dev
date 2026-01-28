@@ -1,6 +1,6 @@
 nav{
     width : 100%;
-    background: #2413bb;
+    /*background: rgb(60, 60, 60);*/ 
     color : white;
     padding : 4px 0;
     position: fixed;
@@ -12,7 +12,7 @@ nav{
     z-index: 5;
 }
 .logo{
-    width: 60px;
+    width: 150px;
 }
 nav ul li{
     display: inline-block;

@@ -18,7 +18,7 @@ a{
     padding-left: 10%;
     padding-right: 10%;
 }
-.btn{background: white;
+.button{background: white;
     color: #212121;
     padding :14px 20px;
     font-size :16px;
@@ -26,4 +26,7 @@ a{
     cursor : pointer;
     border: 0;
     outline: 0;
+    display : inline-flex;
+    align-items: center;
+    justify-content: center;
 }
