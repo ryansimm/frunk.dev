@@ -1,0 +1,119 @@
+.aptitude-test-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(rgba(64, 61, 86, 0.7)), url('../../assets/Background.png');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.test-intro, .test-header, .question-container, .test-results {
+  background: white;
+  width: 90%;
+  max-width: 800px;
+  padding: 20px;
+}
+
+.test-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 15px 0;
+}
+
+.info-item {
+  flex: 1 1 200px;
+}
+
+.button-start-test, .continue-button, .next-button, .submit-button {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  background: #f2f2f2;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.test-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #eee;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #999;
+}
+
+.time-warning {
+  color: #c0392b;
+}
+
+.difficulty-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  margin-bottom: 10px;
+  font-size: 0.8rem;
+}
+
+.question-text {
+  margin-bottom: 15px;
+  white-space: pre-wrap;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.option {
+  padding: 8px;
+  border: 1px solid #ddd;
+  background: #fafafa;
+  cursor: pointer;
+  text-align: left;
+}
+
+.option.correct { background: #e6f4ea; }
+.option.incorrect { background: #fdecea; }
+
+.code-editor {
+  width: 100%;
+  min-height: 140px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  margin-bottom: 10px;
+  font-family: monospace;
+}
+
+.feedback {
+  margin: 10px 0;
+  padding: 8px;
+  border: 1px solid #ddd;
+}
+
+.test-results {
+  text-align: center;
+}
+
+.results-card {
+  border: 1px solid #ddd;
+  padding: 15px;
+}
+
+.score-text {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
