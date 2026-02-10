@@ -1,17 +1,19 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import './NavBar.css'
-import crest from '../../assets/crest.jpg'
+import logo from '../../assets/logo.png'
 
-const NavBar = () => {
+
+const NavBar = ({ userLevel }) => {
+  const navigate = useNavigate()
+
   return (
-    <nav>
-        <img src = {crest}></img>
+    <nav className = "container-2">
+        <button onClick={() => navigate('/')}><img src = {logo} alt = "Logo" className = "logo"/></button>
+        
         <ul>
-            <li>Home</li>
-            <li>How To Use</li>
-            <li>About AI</li>
-            <li>Programming</li>
-            <li>Feedback</li>
+            <li><button className="button" onClick={() => navigate('/profile')}>Profile</button></li>
+            <li><button className="button">Feedback</button></li>
         </ul>
     </nav>
   )

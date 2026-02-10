@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.13.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -23,5 +24,18 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "vite": "^7.2.4"
-  }
+  },
+  "description": "This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.",
+  "main": "eslint.config.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ryansimm/honours-project.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ryansimm/honours-project/issues"
+  },
+  "homepage": "https://github.com/ryansimm/honours-project#readme"
 }

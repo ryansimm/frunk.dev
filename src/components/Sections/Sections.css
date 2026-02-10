@@ -1,0 +1,15 @@
+.sections{
+    margin: 80px auto;
+    width: 90%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.section img{
+    width: 100%;
+    border-radius: 10px ;
+    display: block;
+}
+.section{
+    flex-basis: 31%;
+}
