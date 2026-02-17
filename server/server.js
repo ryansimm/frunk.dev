@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import express from 'express';
 import axios from 'axios';
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 
 dotenv.config()
 
@@ -204,5 +204,72 @@ connectToDB().then(() => {
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
     });
+
+// user registration
+app.post('/api/auth/register', async (req, res) => {
+    const { email, password, name } = req.body;
+    
+    if (!email || !password || !name) {
+        return res.status(400).json({ error: 'All fields are required' });
+    }
+    
+    try {
+        // Check if user exists
+        const existingUser = await db.collection('users').findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ error: 'User already exists' });
+        }
+
+        // Create new user
+        const user = {
+            email,
+            password, // TODO: Hash this in production with bcrypt
+            name,
+            createdAt: new Date(),
+            aptitudeCompleted: false
+        };
+
+        const result = await db.collection('users').insertOne(user);
+        
+        res.json({ 
+            success: true, 
+            userId: result.insertedId.toString(),
+            user: { email, name }
+        });
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ error: 'Registration failed' });
+    }
+});
+
+// User login
+app.post('/api/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+    }
+    
+    try {
+        const user = await db.collection('users').findOne({ email, password });
+        
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+
+        res.json({ 
+            success: true, 
+            userId: user._id.toString(),
+            user: { 
+                email: user.email, 
+                name: user.name,
+                aptitudeCompleted: user.aptitudeCompleted || false
+            }
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Login failed' });
+    }
+});
 });
 
