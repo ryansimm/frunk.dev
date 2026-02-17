@@ -62,7 +62,7 @@ app.post('/api/feedback', async (req, res) => {
         const response = await axios.post(
             'https://openrouter.ai/api/v1/chat/completions',
             {
-                model: 'anthropic/claude-3.5-sonnet',
+                model: 'openai/gpt-oss-120b:free',
                 messages: [
                     {
                         role: 'system',
@@ -94,7 +94,7 @@ app.post('/api/feedback', async (req, res) => {
             userAnswer,
             correctAnswer,
             feedback,
-            model: 'anthropic/claude-3.5-sonnet',
+            model: 'openai/gpt-oss-120b:free',
             responseTime,
             timestamp: new Date()
         });
@@ -128,7 +128,7 @@ app.post('/api/generate-question', async (req, res) => {
         const response = await axios.post(
             'https://openrouter.ai/api/v1/chat/completions',
             {
-                model: 'anthropic/claude-3.5-sonnet',
+                model: 'openai/gpt-oss-120b:free',
                 messages: [
                     {
                         role: 'system',
