@@ -3,12 +3,18 @@ import cors from 'cors';
 import express from 'express';
 import axios from 'axios';
 import { MongoClient, ObjectId } from 'mongodb';
+import { GoogleGenerativeAI } from '@google/generative-ai'; 
+
+
 
 dotenv.config()
 
 const API_KEY = process.env.OPENROUTER_API_KEY
 const PORT = process.env.PORT || 5000
 const MONGO_URI = 'mongodb://localhost:27017';
+
+// Google AI 
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 const app = express();
 app.use(cors());
@@ -47,165 +53,8 @@ app.get('/api/test', async (req, res) => {
     }
 });
 
-// Endpoint 1: AI Feedback
-app.post('/api/feedback', async (req, res) => {
-    const { userAnswer, correctAnswer, questionText, userId } = req.body;
-    
-    // Validation
-    if (!userAnswer || !questionText) {
-        return res.status(400).json({ error: 'Missing required fields' });
-    }
 
-    const startTime = Date.now();
-
-    try {
-        const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            {
-                model: 'openai/gpt-oss-120b:free',
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'You are a supportive tutor providing constructive, specific feedback on student answers to coding based questions. Be encouraging but honest. Point out what they did well and where they can improve. Most specifically, do not provide students with a quick fix with generatitive code, but instead guide them to find the solution themselves. Always provide actionable advice for improvement.'
-                    },
-                    {
-                        role: 'user',
-                        content: `Question: ${questionText}\n\nStudent Answer: ${userAnswer}\n\nCorrect Answer: ${correctAnswer || 'Not provided'}\n\nProvide specific, constructive feedback.`
-                    }
-                ]
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${API_KEY}`,
-                    'Content-Type': 'application/json',
-                    'HTTP-Referer': 'http://localhost:5000',
-                    'X-Title': 'frunk.dev (AI Tutoring Platform)'
-                }
-            }
-        );
-
-        const feedback = response.data.choices[0].message.content;
-        const responseTime = Date.now() - startTime;
-
-        // Log interaction to database
-        await db.collection('feedback_logs').insertOne({
-            userId: userId || 'anonymous',
-            questionText,
-            userAnswer,
-            correctAnswer,
-            feedback,
-            model: 'openai/gpt-oss-120b:free',
-            responseTime,
-            timestamp: new Date()
-        });
-
-        res.json({ 
-            feedback,
-            responseTime 
-        });
-
-    } catch (error) {
-        console.error('Feedback error:', error.response?.data || error.message);
-        res.status(500).json({ 
-            error: 'Failed to generate feedback',
-            details: error.response?.data?.error || error.message
-        });
-    }
-});
-
-// Endpoint 2: Generate Question
-app.post('/api/generate-question', async (req, res) => {
-    const { topic, difficulty, userId } = req.body;
-
-    // Validation
-    if (!topic || !difficulty) {
-        return res.status(400).json({ error: 'Missing topic or difficulty' });
-    }
-
-    const startTime = Date.now();
-
-    try {
-        const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            {
-                model: 'openai/gpt-oss-120b:free',
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'You are a question generator. Create educational questions with multiple choice options. Always respond with valid JSON only, no additional text.'
-                    },
-                    {
-                        role: 'user',
-                        content: `Generate a ${difficulty} difficulty multiple-choice question about "${topic}". 
-                        
-Return ONLY valid JSON in this exact format:
-{
-  "question": "The question text here?",
-  "options": ["Option A", "Option B", "Option C", "Option D"],
-  "correctAnswer": "The correct option text",
-  "explanation": "Why this is the correct answer"
-}`
-                    }
-                ]
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${API_KEY}`,
-                    'Content-Type': 'application/json',
-                    'HTTP-Referer': 'http://localhost:5000',
-                    'X-Title': 'AI Tutoring Platform'
-                }
-            }
-        );
-
-        const content = response.data.choices[0].message.content;
-        
-        // Parse the JSON response 
-        let questionData;
-        try {
-            const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
-            questionData = JSON.parse(cleanContent);
-        } catch (parseError) {
-            console.error('JSON parse error:', content);
-            throw new Error('AI returned invalid JSON');
-        }
-
-        const responseTime = Date.now() - startTime;
-
-        // Store in database
-        const dbEntry = {
-            userId: userId || 'anonymous',
-            topic,
-            difficulty,
-            ...questionData,
-            createdAt: new Date(),
-            responseTime
-        };
-
-        const result = await db.collection('questions').insertOne(dbEntry);
-
-        res.json({ 
-            ...questionData,
-            id: result.insertedId,
-            responseTime
-        });
-
-    } catch (error) {
-        console.error('Question generation error:', error.response?.data || error.message);
-        res.status(500).json({ 
-            error: 'Failed to generate question',
-            details: error.response?.data?.error || error.message
-        });
-    }
-});
-
-// Start server and connect to DB
-connectToDB().then(() => {
-    app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-    });
-
-// user registration
+// Endpoint 1 : User Registration 
 app.post('/api/auth/register', async (req, res) => {
     const { email, password, name } = req.body;
     
@@ -242,7 +91,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-// User login
+// Endpoint 2: User Login
 app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     
@@ -271,5 +120,135 @@ app.post('/api/auth/login', async (req, res) => {
         res.status(500).json({ error: 'Login failed' });
     }
 });
+
+// Endpoint 3: AI Feedback
+app.post('/api/feedback', async (req, res) => {
+    const { userAnswer, correctAnswer, questionText, userId } = req.body;
+    
+    // Validation
+    if (!userAnswer || !questionText) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const startTime = Date.now();
+
+    try {
+        // import the model
+        const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+
+        // single prompt with all info to generate feedback
+        const prompt = `You are a supportive tutor providing constructive, specific feedback on student answers to coding based questions. Be encouraging but honest. Point out what they did well and where they can improve. Most specifically, do not provide students with a quick fix with generative code, but instead guide them to find the solution themselves. Always provide actionable advice for improvement.
+
+Question: ${questionText}
+
+Student Answer: ${userAnswer}
+
+Correct Answer: ${correctAnswer || 'Not provided'}
+
+Provide specific, constructive feedback.`;
+
+        const result = await model.generateContent(prompt);
+        const feedback = result.response.text();
+        const responseTime = Date.now() - startTime;
+
+        // Log interaction to database
+        await db.collection('feedback_logs').insertOne({
+            userId: userId || 'anonymous',
+            questionText,
+            userAnswer,
+            correctAnswer,
+            feedback,
+            model: 'gemini-3-flash-preview', 
+            responseTime,
+            timestamp: new Date()
+        });
+
+        res.json({ 
+            feedback,
+            responseTime 
+        });
+
+    } catch (error) {
+        // Error handling
+        console.error('Feedback error:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate feedback',
+            details: error.message
+        });
+    }
 });
 
+// Endpoint 4: Generate Question
+app.post('/api/generate-question', async (req, res) => {
+    const { topic, difficulty, userId } = req.body;
+
+    // Validation
+    if (!topic || !difficulty) {
+        return res.status(400).json({ error: 'Missing topic or difficulty' });
+    }
+
+    const startTime = Date.now();
+
+    try {
+        // Import the model
+        const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+        // Single prompt to generate a question with all required info
+        const prompt = `You are a question generator. Create educational questions with multiple choice options. Always respond with valid JSON only, no additional text.
+
+Generate a ${difficulty} difficulty multiple-choice question about "${topic}". 
+
+Return ONLY valid JSON in this exact format:
+{
+  "question": "The question text here?",
+  "options": ["Option A", "Option B", "Option C", "Option D"],
+  "correctAnswer": "The correct option text",
+  "explanation": "Why this is the correct answer"
+}`;
+
+        const result = await model.generateContent(prompt);
+        const content = result.response.text();
+        
+        // Parse JSON response (handle potential markdown code blocks)
+        let questionData;
+        try {
+            const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
+            questionData = JSON.parse(cleanContent);
+        } catch (parseError) {
+            console.error('JSON parse error:', content);
+            throw new Error('AI returned invalid JSON');
+        }
+
+        const responseTime = Date.now() - startTime;
+
+        // Store in database
+        const dbEntry = {
+            userId: userId || 'anonymous',
+            topic,
+            difficulty,
+            ...questionData,
+            createdAt: new Date(),
+            responseTime
+        };
+
+        const insertResult = await db.collection('questions').insertOne(dbEntry); 
+
+        res.json({ 
+            ...questionData,
+            id: insertResult.insertedId, 
+            responseTime
+        });
+
+    } catch (error) {
+        console.error('Question generation error:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate question',
+            details: error.message //Error handling to return AI error details 
+        });
+    }
+});
+
+connectToDB().then(() => {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+});
