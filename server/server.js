@@ -9,7 +9,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 dotenv.config()
 
-const API_KEY = process.env.OPENROUTER_API_KEY
+//const API_KEY = process.env.OPENROUTER_API_KEY
 const PORT = process.env.PORT || 5000
 const MONGO_URI = 'mongodb://localhost:27017';
 
