@@ -27,5 +27,28 @@ export const apiService ={
         });
 
         return response.data;
-    }
+    },
+
+    // Generate adaptive question
+    generateAdaptiveQuestion: async (questionNumber, lastAnswerCorrect, currentDifficulty, userId) => {
+        const response = await axios.post(`${API_BASE_URL}/generate-adaptive-question`, {
+            questionNumber,
+            lastAnswerCorrect,
+            currentDifficulty,
+            userId
+    });
+    return response.data;
+    },
+
+    // Evaluate aptitude test code
+    evaluateAptitudeCode: async (userCode, question, difficulty, testCases, userId) => {
+        const response = await axios.post(`${API_BASE_URL}/evaluate-aptitude-code`, {
+            userCode,
+            question,
+            difficulty,
+            testCases,
+            userId
+        });
+        return response.data;
+},
 };

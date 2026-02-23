@@ -247,6 +247,172 @@ Return ONLY valid JSON in this exact format:
     }
 });
 
+// Endpoint 5 : adaptive style coding questions based on performance
+app.post('/api/generate-adaptive-question', async (req, res) => {
+    const { questionNumber, lastAnswerCorrect, currentDifficulty, userId } = req.body;
+
+    const startTime = Date.now();
+
+    try {
+        // Determine next difficulty level
+        let nextDifficulty = currentDifficulty || 'medium';
+        
+        if (questionNumber > 1) {
+            if (lastAnswerCorrect && currentDifficulty === 'easy') {
+                nextDifficulty = 'medium';
+            } else if (lastAnswerCorrect && currentDifficulty === 'medium') {
+                nextDifficulty = 'hard';
+            } else if (!lastAnswerCorrect && currentDifficulty === 'hard') {
+                nextDifficulty = 'medium';
+            } else if (!lastAnswerCorrect && currentDifficulty === 'medium') {
+                nextDifficulty = 'easy';
+            }
+        }
+
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' });
+
+        const prompt = `You are creating a Python coding challenge for an adaptive aptitude test. Generate a ${nextDifficulty} difficulty question.
+
+Difficulty guidelines:
+- EASY: Basic syntax, simple loops, basic functions (beginner level)
+- MEDIUM: Functions with parameters, list operations, string manipulation, conditionals (intermediate level)
+- HARD: Algorithms, recursion, classes, complex data structures (advanced level)
+
+Generate question #${questionNumber} of 12.
+
+Return ONLY valid JSON in this exact format:
+{
+  "question": "Clear problem description with example input/output",
+  "codeTemplate": "def function_name():\\n    # Your code here\\n    pass",
+  "difficulty": "${nextDifficulty}",
+  "hints": ["Hint 1", "Hint 2"],
+  "testCases": [
+    {"input": "example input", "expected": "expected output"},
+    {"input": "edge case", "expected": "expected output"}
+  ]
+}
+
+Make the question engaging and practical. Include clear examples.`;
+
+        const result = await model.generateContent(prompt);
+        const content = result.response.text();
+        
+        let questionData;
+        try {
+            const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
+            questionData = JSON.parse(cleanContent);
+        } catch (parseError) {
+            console.error('JSON parse error:', content);
+            throw new Error('AI returned invalid JSON');
+        }
+
+        const responseTime = Date.now() - startTime;
+
+        // Store question in database
+        const dbEntry = {
+            userId: userId || 'anonymous',
+            questionNumber,
+            difficulty: nextDifficulty,
+            ...questionData,
+            createdAt: new Date(),
+            responseTime
+        };
+
+        const insertResult = await db.collection('aptitude_questions').insertOne(dbEntry);
+
+        res.json({ 
+            ...questionData,
+            id: insertResult.insertedId,
+            questionNumber,
+            responseTime
+        });
+
+    } catch (error) {
+        console.error('Adaptive question error:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate question',
+            details: error.message
+        });
+    }
+});
+
+// Evaluate code submission for aptitude test
+app.post('/api/evaluate-aptitude-code', async (req, res) => {
+    const { userCode, question, difficulty, testCases, userId } = req.body;
+
+    const startTime = Date.now();
+
+    try {
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' });
+
+        const prompt = `You are evaluating a Python coding submission for an aptitude test.
+
+Difficulty Level: ${difficulty}
+Question: ${question}
+
+Student's Code:
+\`\`\`python
+${userCode}
+\`\`\`
+
+Test Cases: ${JSON.stringify(testCases)}
+
+Evaluate the code and respond with ONLY valid JSON:
+{
+  "isCorrect": true/false,
+  "score": 0-100,
+  "feedback": "Brief constructive feedback (2-3 sentences)",
+  "issues": ["Issue 1", "Issue 2"] or [],
+  "strengths": ["Strength 1"] or []
+}
+
+Criteria:
+- Does it solve the problem correctly?
+- Would it pass the test cases?
+- Is the logic sound?
+- Any syntax errors?
+
+Be strict but fair. Only mark as correct if it genuinely solves the problem.`;
+
+        const result = await model.generateContent(prompt);
+        const content = result.response.text();
+        
+        let evaluationData;
+        try {
+            const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
+            evaluationData = JSON.parse(cleanContent);
+        } catch (parseError) {
+            console.error('JSON parse error:', content);
+            throw new Error('AI returned invalid JSON');
+        }
+
+        const responseTime = Date.now() - startTime;
+
+        // Store submission
+        await db.collection('aptitude_submissions').insertOne({
+            userId: userId || 'anonymous',
+            question,
+            difficulty,
+            userCode,
+            evaluation: evaluationData,
+            timestamp: new Date(),
+            responseTime
+        });
+
+        res.json({ 
+            ...evaluationData,
+            responseTime
+        });
+
+    } catch (error) {
+        console.error('Code evaluation error:', error);
+        res.status(500).json({ 
+            error: 'Failed to evaluate code',
+            details: error.message
+        });
+    }
+});
+
 connectToDB().then(() => {
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
