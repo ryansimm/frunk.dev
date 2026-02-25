@@ -1,19 +1,29 @@
 .aptitude-test-container {
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 110px 20px 20px;
   background: linear-gradient(rgba(64, 61, 86, 0.7)), url('../../assets/Background.png');
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
 }
 
-.test-intro, .test-header, .question-container, .test-results {
+.test-intro,
+.test-results {
   background: white;
-  width: 90%;
-  max-width: 800px;
+  width: 92%;
+  max-width: 900px;
+  padding: 20px;
+}
+
+.test-header,
+.question-container {
+  background: white;
+  width: 95%;
+  max-width: 1100px;
   padding: 20px;
 }
 
@@ -117,3 +127,248 @@
   margin-bottom: 10px;
 }
 
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+}
+
+.loading-container p {
+  color: #666;
+  margin-top: 10px;
+}
+
+.spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 1s linear infinite;
+  margin-top: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.score-display {
+  background: #f0f0f0;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  color: #667eea;
+}
+
+.question-header {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.test-content-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.code-editor-section {
+  margin: 20px 0;
+}
+
+.code-editor-section label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.code-editor {
+  width: 100%;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 15px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  background: #f8f8f8;
+  resize: vertical;
+}
+
+.code-editor:focus {
+  outline: none;
+  border-color: #667eea;
+  background: white;
+}
+
+.evaluation-result {
+  margin-top: 0;
+  padding: 25px;
+  border-radius: 12px;
+  border: 2px solid #ddd;
+}
+
+.feedback-panel {
+  margin: 20px 0;
+  border: 2px solid #ddd;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fafafa;
+}
+
+.feedback-panel h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: #333;
+}
+
+.feedback-empty {
+  border: 2px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 14px;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.evaluation-pending {
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: 10px;
+  border: 2px dashed #667eea;
+  background: #eef2ff;
+}
+
+.evaluation-pending h4 {
+  margin: 0 0 8px 0;
+  color: #3730a3;
+}
+
+.evaluation-pending p {
+  margin: 0;
+  color: #4c1d95;
+}
+
+.evaluation-result.correct {
+  background: #f0fdf4;
+  border-color: #22c55e;
+}
+
+.evaluation-result.incorrect {
+  background: #fef2f2;
+  border-color: #ef4444;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.result-header h3 {
+  margin: 0;
+}
+
+.score-badge {
+  background: #667eea;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.feedback,
+.strengths,
+.issues {
+  margin-top: 15px;
+}
+
+.feedback h4,
+.strengths h4,
+.issues h4 {
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.strengths ul,
+.issues ul {
+  margin: 10px 0;
+  padding-left: 25px;
+}
+
+.strengths li {
+  color: #22c55e;
+  margin-bottom: 5px;
+}
+
+.issues li {
+  color: #ef4444;
+  margin-bottom: 5px;
+}
+
+.how-it-works {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 12px;
+  margin: 25px 0;
+}
+
+.how-it-works h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.how-it-works ol {
+  margin: 15px 0;
+  padding-left: 25px;
+}
+
+.how-it-works li {
+  margin-bottom: 10px;
+  color: #555;
+}
+
+.difficulty-breakdown {
+  margin: 25px 0;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 12px;
+}
+
+.breakdown-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.breakdown-stats .stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background: white;
+  border-radius: 8px;
+}
+
+.level-description {
+  margin-top: 20px;
+  padding: 15px;
+  background: #e0e7ff;
+  border-radius: 8px;
+  color: #4338ca;
+  font-weight: 500;
+}
+
+@media (max-width: 900px) {
+  .test-content-grid {
+    grid-template-columns: 1fr;
+  }
+}

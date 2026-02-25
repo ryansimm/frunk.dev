@@ -1,7 +1,7 @@
+/* global process */
 import dotenv from 'dotenv';
 import cors from 'cors';
 import express from 'express';
-import axios from 'axios';
 import { MongoClient, ObjectId } from 'mongodb';
 import { GoogleGenerativeAI } from '@google/generative-ai'; 
 
@@ -15,6 +15,231 @@ const MONGO_URI = 'mongodb://localhost:27017';
 
 // Google AI 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+
+const JSON_RESPONSE_MODELS = [
+    process.env.GEMINI_MODEL,
+    'gemini-2.0-flash',
+    'gemini-1.5-flash'
+].filter(Boolean);
+
+function extractJsonFromModelResponse(rawText) {
+    const content = (rawText || '').replace(/```json\n?|\n?```/g, '').trim();
+
+    try {
+        return JSON.parse(content);
+    } catch {
+        const firstBrace = content.indexOf('{');
+        const lastBrace = content.lastIndexOf('}');
+
+        if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+            throw new Error('AI response did not contain JSON');
+        }
+
+        const jsonCandidate = content.slice(firstBrace, lastBrace + 1);
+        return JSON.parse(jsonCandidate);
+    }
+}
+
+async function generateJsonWithFallback(prompt, modelNames) {
+    let lastError;
+
+    for (const modelName of modelNames) {
+        try {
+            const model = genAI.getGenerativeModel({ model: modelName });
+            const result = await model.generateContent(prompt);
+            const text = result.response.text();
+            const json = extractJsonFromModelResponse(text);
+            return { json, modelName };
+        } catch (error) {
+            lastError = error;
+            console.warn(`Model failed (${modelName}):`, error.message);
+        }
+    }
+
+    throw lastError || new Error('No AI model available');
+}
+
+function getFallbackMcqQuestion(topic, difficulty) {
+    const normalizedDifficulty = (difficulty || 'medium').toLowerCase();
+    return {
+        question: `Which statement best describes ${topic} in Python at a ${normalizedDifficulty} level?`,
+        options: [
+            `${topic} is only used in web development`,
+            `${topic} helps structure and solve problems in Python programs`,
+            `${topic} cannot be tested with code`,
+            `${topic} is unrelated to Python syntax or logic`
+        ],
+        correctAnswer: `${topic} helps structure and solve problems in Python programs`,
+        explanation: `${topic} is a practical programming concept used to build and reason about Python solutions.`
+    };
+}
+
+function getFallbackAdaptiveQuestion(difficulty, questionNumber) {
+    const level = (difficulty || 'medium').toLowerCase();
+
+    const byDifficulty = {
+        easy: {
+            question: 'Write a function that returns the sum of all even numbers in a list.',
+            codeTemplate: 'def sum_even(numbers):\n    # Your code here\n    pass',
+            hints: ['Use a loop or sum with a condition.', 'Check each number with n % 2 == 0.'],
+            testCases: [
+                { input: '[1, 2, 3, 4]', expected: '6' },
+                { input: '[5, 7, 9]', expected: '0' }
+            ]
+        },
+        medium: {
+            question: 'Write a function that returns the most frequent character in a string (ignore spaces).',
+            codeTemplate: 'def most_frequent_char(text):\n    # Your code here\n    pass',
+            hints: ['You can use a dictionary to count frequencies.', 'Skip whitespace characters.'],
+            testCases: [
+                { input: '"banana"', expected: '"a"' },
+                { input: '"a b b c"', expected: '"b"' }
+            ]
+        },
+        hard: {
+            question: 'Write a function that returns the first non-repeating character in a string, or None if none exists.',
+            codeTemplate: 'def first_non_repeating(text):\n    # Your code here\n    pass',
+            hints: ['Count occurrences first, then scan in original order.', 'Return None when every char repeats.'],
+            testCases: [
+                { input: '"swiss"', expected: '"w"' },
+                { input: '"aabb"', expected: 'None' }
+            ]
+        }
+    };
+
+    const selected = byDifficulty[level] || byDifficulty.medium;
+
+    return {
+        question: selected.question,
+        codeTemplate: selected.codeTemplate,
+        difficulty: level,
+        hints: selected.hints,
+        testCases: selected.testCases,
+        fallback: true,
+        questionNumber
+    };
+}
+
+function getFallbackEvaluation(userCode) {
+    const code = (userCode || '').trim();
+    const hasCode = code.length > 0;
+    const hasDef = /\bdef\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(/.test(code);
+    const hasReturn = /\breturn\b/.test(code);
+    const hasPlaceholder = /\bpass\b|todo|your code here/i.test(code);
+    const hasControlFlow = /\bfor\b|\bwhile\b|\bif\b|\belif\b|\btry\b/.test(code);
+    const hasUsefulOps = /\bsort\b|\bsorted\b|\bappend\b|\bcount\b|\bdict\b|\bset\b|\blen\b/.test(code);
+
+    const issues = [];
+    const strengths = [];
+
+    if (!hasCode) {
+        return {
+            isCorrect: false,
+            score: 0,
+            feedback: 'No code was submitted. Add a full solution and submit again.',
+            issues: ['No code submitted.'],
+            strengths: [],
+            fallback: true
+        };
+    }
+
+    let score = 10;
+    if (hasDef) {
+        score += 20;
+        strengths.push('Defines a Python function.');
+    } else {
+        issues.push('Missing a clear function definition.');
+    }
+
+    if (hasReturn) {
+        score += 20;
+        strengths.push('Includes a return statement.');
+    } else {
+        issues.push('Missing return logic for final output.');
+    }
+
+    if (code.length >= 80) {
+        score += 20;
+    } else {
+        issues.push('Solution is very short and may be incomplete.');
+    }
+
+    if (hasControlFlow) score += 15;
+    if (hasUsefulOps) score += 15;
+
+    if (hasPlaceholder) {
+        score = Math.min(score, 25);
+        issues.push('Contains placeholder or incomplete logic (e.g., pass/TODO).');
+    }
+
+    score = Math.max(0, Math.min(100, score));
+    const isCorrect = score >= 80 && issues.length === 0 && hasDef && hasReturn && !hasPlaceholder;
+
+    return {
+        isCorrect,
+        score,
+        feedback: isCorrect
+            ? 'Structured solution detected. This fallback result is provisional; AI evaluation will provide stricter semantic grading once available.'
+            : 'Your solution needs stronger implementation detail. Add complete logic and ensure it clearly returns the correct result.',
+        issues,
+        strengths,
+        fallback: true
+    };
+}
+
+function normalizeEvaluationResult(evaluationData, userCode) {
+    const code = (userCode || '').trim();
+    const hasDef = /\bdef\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(/.test(code);
+    const hasReturn = /\breturn\b/.test(code);
+    const hasPlaceholder = /\bpass\b|todo|your code here/i.test(code);
+    const isVeryShort = code.length < 40;
+
+    let score = Number.isFinite(Number(evaluationData?.score)) ? Number(evaluationData.score) : 0;
+    score = Math.max(0, Math.min(100, score));
+
+    const issues = Array.isArray(evaluationData?.issues)
+        ? evaluationData.issues.filter(Boolean)
+        : [];
+    const strengths = Array.isArray(evaluationData?.strengths)
+        ? evaluationData.strengths.filter(Boolean)
+        : [];
+
+    if (!hasDef) {
+        score = Math.min(score, 45);
+        issues.push('Missing clear function definition.');
+    }
+
+    if (!hasReturn) {
+        score = Math.min(score, 55);
+        issues.push('Missing explicit return statement.');
+    }
+
+    if (hasPlaceholder) {
+        score = Math.min(score, 25);
+        issues.push('Contains placeholder/incomplete code (pass/TODO).');
+    }
+
+    if (isVeryShort) {
+        score = Math.min(score, 50);
+        issues.push('Code is too short to demonstrate a complete solution.');
+    }
+
+    if (issues.length >= 2) {
+        score = Math.min(score, 70);
+    }
+
+    const isCorrect = Boolean(evaluationData?.isCorrect) && score >= 85 && issues.length === 0;
+
+    return {
+        isCorrect,
+        score,
+        feedback: evaluationData?.feedback || (isCorrect
+            ? 'Correct solution with strong implementation quality.'
+            : 'Solution is not yet strong enough for full credit. Improve correctness and completeness.'),
+        issues,
+        strengths
+    };
+}
 
 const app = express();
 app.use(cors());
@@ -134,7 +359,7 @@ app.post('/api/feedback', async (req, res) => {
 
     try {
         // import the model
-        const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
         // single prompt with all info to generate feedback
         const prompt = `You are a supportive tutor providing constructive, specific feedback on student answers to coding based questions. Be encouraging but honest. Point out what they did well and where they can improve. Most specifically, do not provide students with a quick fix with generative code, but instead guide them to find the solution themselves. Always provide actionable advice for improvement.
@@ -191,7 +416,6 @@ app.post('/api/generate-question', async (req, res) => {
 
     try {
         // Import the model
-        const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
         // Single prompt to generate a question with all required info
         const prompt = `You are a question generator. Create educational questions with multiple choice options. Always respond with valid JSON only, no additional text.
 
@@ -205,18 +429,7 @@ Return ONLY valid JSON in this exact format:
   "explanation": "Why this is the correct answer"
 }`;
 
-        const result = await model.generateContent(prompt);
-        const content = result.response.text();
-        
-        // Parse JSON response (handle potential markdown code blocks)
-        let questionData;
-        try {
-            const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
-            questionData = JSON.parse(cleanContent);
-        } catch (parseError) {
-            console.error('JSON parse error:', content);
-            throw new Error('AI returned invalid JSON');
-        }
+        const { json: questionData, modelName } = await generateJsonWithFallback(prompt, JSON_RESPONSE_MODELS);
 
         const responseTime = Date.now() - startTime;
 
@@ -226,6 +439,7 @@ Return ONLY valid JSON in this exact format:
             topic,
             difficulty,
             ...questionData,
+            model: modelName,
             createdAt: new Date(),
             responseTime
         };
@@ -240,9 +454,12 @@ Return ONLY valid JSON in this exact format:
 
     } catch (error) {
         console.error('Question generation error:', error);
-        res.status(500).json({ 
-            error: 'Failed to generate question',
-            details: error.message //Error handling to return AI error details 
+        const fallbackQuestion = getFallbackMcqQuestion(topic, difficulty);
+        res.json({
+            ...fallbackQuestion,
+            responseTime: Date.now() - startTime,
+            fallback: true,
+            details: error.message
         });
     }
 });
@@ -252,11 +469,10 @@ app.post('/api/generate-adaptive-question', async (req, res) => {
     const { questionNumber, lastAnswerCorrect, currentDifficulty, userId } = req.body;
 
     const startTime = Date.now();
+    let nextDifficulty = currentDifficulty || 'medium';
 
     try {
         // Determine next difficulty level
-        let nextDifficulty = currentDifficulty || 'medium';
-        
         if (questionNumber > 1) {
             if (lastAnswerCorrect && currentDifficulty === 'easy') {
                 nextDifficulty = 'medium';
@@ -268,8 +484,6 @@ app.post('/api/generate-adaptive-question', async (req, res) => {
                 nextDifficulty = 'easy';
             }
         }
-
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' });
 
         const prompt = `You are creating a Python coding challenge for an adaptive aptitude test. Generate a ${nextDifficulty} difficulty question.
 
@@ -294,17 +508,7 @@ Return ONLY valid JSON in this exact format:
 
 Make the question engaging and practical. Include clear examples.`;
 
-        const result = await model.generateContent(prompt);
-        const content = result.response.text();
-        
-        let questionData;
-        try {
-            const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
-            questionData = JSON.parse(cleanContent);
-        } catch (parseError) {
-            console.error('JSON parse error:', content);
-            throw new Error('AI returned invalid JSON');
-        }
+        const { json: questionData, modelName } = await generateJsonWithFallback(prompt, JSON_RESPONSE_MODELS);
 
         const responseTime = Date.now() - startTime;
 
@@ -314,6 +518,7 @@ Make the question engaging and practical. Include clear examples.`;
             questionNumber,
             difficulty: nextDifficulty,
             ...questionData,
+            model: modelName,
             createdAt: new Date(),
             responseTime
         };
@@ -329,8 +534,10 @@ Make the question engaging and practical. Include clear examples.`;
 
     } catch (error) {
         console.error('Adaptive question error:', error);
-        res.status(500).json({ 
-            error: 'Failed to generate question',
+        const fallbackQuestion = getFallbackAdaptiveQuestion(nextDifficulty || currentDifficulty || 'medium', questionNumber);
+        res.json({ 
+            ...fallbackQuestion,
+            responseTime: Date.now() - startTime,
             details: error.message
         });
     }
@@ -343,8 +550,6 @@ app.post('/api/evaluate-aptitude-code', async (req, res) => {
     const startTime = Date.now();
 
     try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' });
-
         const prompt = `You are evaluating a Python coding submission for an aptitude test.
 
 Difficulty Level: ${difficulty}
@@ -366,25 +571,21 @@ Evaluate the code and respond with ONLY valid JSON:
   "strengths": ["Strength 1"] or []
 }
 
-Criteria:
-- Does it solve the problem correctly?
-- Would it pass the test cases?
-- Is the logic sound?
-- Any syntax errors?
+Strict grading rubric (very important):
+- 90-100: Fully correct, robust, handles edge cases, clean logic.
+- 75-89: Mostly correct but has minor edge-case or quality gaps.
+- 50-74: Partially correct, significant missing logic.
+- 1-49: Incorrect/incomplete logic.
+- 0: Empty or irrelevant submission.
 
-Be strict but fair. Only mark as correct if it genuinely solves the problem.`;
+Rules:
+- If code contains placeholders like "pass" or TODO, score must be <= 25 and isCorrect=false.
+- If required logic is missing or test cases would fail, isCorrect=false.
+- Do not award high scores for boilerplate structure alone.
+- Be strict and conservative with scoring.`;
 
-        const result = await model.generateContent(prompt);
-        const content = result.response.text();
-        
-        let evaluationData;
-        try {
-            const cleanContent = content.replace(/```json\n?|\n?```/g, '').trim();
-            evaluationData = JSON.parse(cleanContent);
-        } catch (parseError) {
-            console.error('JSON parse error:', content);
-            throw new Error('AI returned invalid JSON');
-        }
+    const { json: rawEvaluationData } = await generateJsonWithFallback(prompt, JSON_RESPONSE_MODELS);
+    const evaluationData = normalizeEvaluationResult(rawEvaluationData, userCode);
 
         const responseTime = Date.now() - startTime;
 
@@ -406,8 +607,10 @@ Be strict but fair. Only mark as correct if it genuinely solves the problem.`;
 
     } catch (error) {
         console.error('Code evaluation error:', error);
-        res.status(500).json({ 
-            error: 'Failed to evaluate code',
+        const fallbackEvaluation = getFallbackEvaluation(userCode);
+        res.json({ 
+            ...fallbackEvaluation,
+            responseTime: Date.now() - startTime,
             details: error.message
         });
     }

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'
+import React, { useState } from 'react'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import NavBar from './components/NavBar/NavBar'
 import Body from './components/Body/Body'
 import Sections from './components/Sections/Sections'
@@ -8,15 +8,10 @@ import UserProfile from './components/UserProfile/UserProfile'
 import { getAptitudeResults } from './utils/levelSystem'
 
 const AppContent = () => {
-  const navigate = useNavigate()
-  const [userLevel, setUserLevel] = useState(null)
-
-  useEffect(() => {
+  const [userLevel, setUserLevel] = useState(() => {
     const results = getAptitudeResults()
-    if (results) {
-      setUserLevel(results.level)
-    }
-  }, [])
+    return results?.level || null
+  })
 
   const handleTestComplete = (results) => {
     setUserLevel(results.level)
