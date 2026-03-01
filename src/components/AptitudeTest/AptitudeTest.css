@@ -38,7 +38,7 @@
   flex: 1 1 200px;
 }
 
-.button-start-test, .continue-button, .next-button, .submit-button {
+.button-start-test, .continue-button, .next-button, .submit-button, .skip-button {
   width: 100%;
   padding: 10px;
   border: 1px solid #ddd;
@@ -187,6 +187,16 @@
   font-weight: 600;
   margin-bottom: 8px;
   color: #333;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.action-buttons .submit-button,
+.action-buttons .skip-button {
+  margin-top: 0;
 }
 
 .code-editor {

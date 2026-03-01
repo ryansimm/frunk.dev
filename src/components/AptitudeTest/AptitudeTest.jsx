@@ -124,7 +124,35 @@ const AptitudeTest = () => {
     }
   };
 
-  const completeTest = async () => {
+  const handleSkipQuestion = async () => {
+    if (evaluatingCode || answered) {
+      return;
+    }
+
+    const questionResult = {
+      questionNumber: currentQuestionNumber,
+      difficulty: currentDifficulty,
+      isCorrect: false,
+      score: 0,
+      skipped: true
+    };
+
+    const updatedHistory = [...questionHistory, questionResult];
+    setQuestionHistory(updatedHistory);
+
+    if (currentQuestionNumber >= TOTAL_QUESTIONS) {
+      await completeTest(updatedHistory);
+      return;
+    }
+
+    await loadNextQuestion(
+      currentQuestionNumber + 1,
+      false,
+      currentDifficulty
+    );
+  };
+
+  const completeTest = async (finalQuestionHistory = questionHistory) => {
     setTestComplete(true);
     
     // Calculate final score
@@ -136,7 +164,7 @@ const AptitudeTest = () => {
       level: level.label,
       correctAnswers,
       totalQuestions: TOTAL_QUESTIONS,
-      questionHistory
+      questionHistory: finalQuestionHistory
     };
     
     // Save to MongoDB
@@ -317,13 +345,22 @@ const AptitudeTest = () => {
             />
 
             {!answered && (
-              <button 
-                className="submit-button" 
-                onClick={handleSubmitCode}
-                disabled={evaluatingCode}
-              >
-                {evaluatingCode ? 'AI is Evaluating...' : 'Submit Solution'}
-              </button>
+              <div className="action-buttons">
+                <button 
+                  className="submit-button" 
+                  onClick={handleSubmitCode}
+                  disabled={evaluatingCode}
+                >
+                  {evaluatingCode ? 'AI is Evaluating...' : 'Submit Solution'}
+                </button>
+                <button
+                  className="skip-button"
+                  onClick={handleSkipQuestion}
+                  disabled={evaluatingCode || loadingQuestion}
+                >
+                  Skip Question
+                </button>
+              </div>
             )}
           </div>
 
