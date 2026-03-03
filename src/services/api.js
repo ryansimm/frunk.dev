@@ -50,5 +50,18 @@ export const apiService ={
             userId
         });
         return response.data;
-},
+    },
+
+    saveAptitudeResults: async (userId, results) => {
+        const response = await axios.post(`${API_BASE_URL}/aptitude-results`, {
+            userId,
+            results
+        });
+        return response.data;
+    },
+
+    getUserTokenBalance: async (userId) => {
+        const response = await axios.get(`${API_BASE_URL}/users/${userId}/tokens`);
+        return response.data;
+    }
 };

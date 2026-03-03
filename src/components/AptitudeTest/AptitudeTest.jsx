@@ -39,6 +39,26 @@ const AptitudeTest = () => {
   const [loadingQuestion, setLoadingQuestion] = useState(false);
   const [evaluatingCode, setEvaluatingCode] = useState(false);
 
+  const updateStoredTokenBalance = (tokenBalance) => {
+    if (!Number.isFinite(tokenBalance)) {
+      return;
+    }
+
+    const userData = localStorage.getItem('user');
+    if (!userData) {
+      return;
+    }
+
+    const parsedUser = JSON.parse(userData);
+    const updatedUser = {
+      ...parsedUser,
+      tokenBalance
+    };
+
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+    window.dispatchEvent(new CustomEvent('tokenBalanceUpdated', { detail: { tokenBalance } }));
+  };
+
   const handleStartTest = async () => {
     setTestStarted(true);
     await loadNextQuestion(1, null, 'easy');
@@ -95,13 +115,18 @@ const AptitudeTest = () => {
         questionNumber: currentQuestionNumber,
         difficulty: currentDifficulty,
         isCorrect: data.isCorrect,
-        score: data.score
+        score: data.score,
+        tokenAward: data.tokenAward || 0
       };
       
       setQuestionHistory([...questionHistory, questionResult]);
       
       if (data.isCorrect) {
         setCorrectAnswers(prev => prev + 1);
+      }
+
+      if (Number.isFinite(data.tokenBalance)) {
+        updateStoredTokenBalance(data.tokenBalance);
       }
       
     } catch (error) {
@@ -169,7 +194,11 @@ const AptitudeTest = () => {
     
     // Save to MongoDB
     try {
-      await apiService.saveAptitudeResults(user?.userId, results);
+      const saveResponse = await apiService.saveAptitudeResults(user?.userId, results);
+
+      if (Number.isFinite(saveResponse?.tokenBalance)) {
+        updateStoredTokenBalance(saveResponse.tokenBalance);
+      }
     } catch (error) {
       console.error('Failed to save results:', error);
     }

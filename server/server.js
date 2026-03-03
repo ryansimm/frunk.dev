@@ -241,6 +241,63 @@ function normalizeEvaluationResult(evaluationData, userCode) {
     };
 }
 
+function resolveDifficultyMultiplier(difficulty) {
+    const level = (difficulty || 'easy').toLowerCase();
+    if (level === 'hard') return 1.5;
+    if (level === 'medium') return 1.2;
+    return 1;
+}
+
+function calculateTokenAward({ evaluationData, difficulty, userCode }) {
+    const score = Number.isFinite(Number(evaluationData?.score)) ? Number(evaluationData.score) : 0;
+    const issuesCount = Array.isArray(evaluationData?.issues) ? evaluationData.issues.length : 0;
+    const strengthsCount = Array.isArray(evaluationData?.strengths) ? evaluationData.strengths.length : 0;
+    const isCorrect = Boolean(evaluationData?.isCorrect);
+    const code = (userCode || '').trim();
+
+    const hasErrorHandling = /\btry\b[\s\S]*\bexcept\b/i.test(code);
+    const hasEfficientPatterns = /(\{.*for.*in.*\}|\[.*for.*in.*\]|\bset\(|\bdict\(|\bany\(|\ball\(|\benumerate\(|\bzip\()/i.test(code);
+    const isLikelyOverlyLong = code.length > 800;
+
+    const baseFromScore = Math.round((score / 100) * 14);
+    const correctnessBonus = isCorrect ? 4 : 0;
+    const difficultyScaled = Math.round((baseFromScore + correctnessBonus) * resolveDifficultyMultiplier(difficulty));
+    const qualityBonus = Math.min(3, strengthsCount);
+    const issuePenalty = Math.min(5, issuesCount);
+    const efficiencyBonus = hasEfficientPatterns ? 2 : 0;
+    const errorHandlingBonus = hasErrorHandling ? 1 : 0;
+    const lengthPenalty = isLikelyOverlyLong ? 2 : 0;
+
+    const raw = difficultyScaled + qualityBonus + efficiencyBonus + errorHandlingBonus - issuePenalty - lengthPenalty;
+    const tokenAward = Math.max(0, Math.min(30, raw));
+
+    return {
+        tokenAward,
+        tokenBreakdown: {
+            baseFromScore,
+            correctnessBonus,
+            difficultyMultiplier: resolveDifficultyMultiplier(difficulty),
+            qualityBonus,
+            efficiencyBonus,
+            errorHandlingBonus,
+            issuePenalty,
+            lengthPenalty
+        }
+    };
+}
+
+function parseOptionalUserId(userId) {
+    if (!userId || userId === 'anonymous') {
+        return null;
+    }
+
+    if (!ObjectId.isValid(userId)) {
+        return null;
+    }
+
+    return new ObjectId(userId);
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -300,7 +357,9 @@ app.post('/api/auth/register', async (req, res) => {
             password, // TODO: Hash this in production with bcrypt
             name,
             createdAt: new Date(),
-            aptitudeCompleted: false
+            aptitudeCompleted: false,
+            tokenBalance: 0,
+            totalTokensEarned: 0
         };
 
         const result = await db.collection('users').insertOne(user);
@@ -308,7 +367,7 @@ app.post('/api/auth/register', async (req, res) => {
         res.json({ 
             success: true, 
             userId: result.insertedId.toString(),
-            user: { email, name }
+            user: { email, name, tokenBalance: 0 }
         });
     } catch (error) {
         console.error('Registration error:', error);
@@ -337,7 +396,8 @@ app.post('/api/auth/login', async (req, res) => {
             user: { 
                 email: user.email, 
                 name: user.name,
-                aptitudeCompleted: user.aptitudeCompleted || false
+                aptitudeCompleted: user.aptitudeCompleted || false,
+                tokenBalance: user.tokenBalance || 0
             }
         });
     } catch (error) {
@@ -586,8 +646,30 @@ Rules:
 
     const { json: rawEvaluationData } = await generateJsonWithFallback(prompt, JSON_RESPONSE_MODELS);
     const evaluationData = normalizeEvaluationResult(rawEvaluationData, userCode);
+    const { tokenAward, tokenBreakdown } = calculateTokenAward({
+        evaluationData,
+        difficulty,
+        userCode
+    });
 
         const responseTime = Date.now() - startTime;
+        let tokenBalance = null;
+
+        const parsedUserId = parseOptionalUserId(userId);
+        if (parsedUserId) {
+            const userUpdate = await db.collection('users').findOneAndUpdate(
+                { _id: parsedUserId },
+                {
+                    $inc: {
+                        tokenBalance: tokenAward,
+                        totalTokensEarned: tokenAward
+                    }
+                },
+                { returnDocument: 'after' }
+            );
+
+            tokenBalance = userUpdate?.value?.tokenBalance ?? null;
+        }
 
         // Store submission
         await db.collection('aptitude_submissions').insertOne({
@@ -596,23 +678,128 @@ Rules:
             difficulty,
             userCode,
             evaluation: evaluationData,
+            tokenAward,
+            tokenBreakdown,
+            tokenBalanceAfterSubmission: tokenBalance,
             timestamp: new Date(),
             responseTime
         });
 
         res.json({ 
             ...evaluationData,
+            tokenAward,
+            tokenBalance,
             responseTime
         });
 
     } catch (error) {
         console.error('Code evaluation error:', error);
         const fallbackEvaluation = getFallbackEvaluation(userCode);
+        const { tokenAward, tokenBreakdown } = calculateTokenAward({
+            evaluationData: fallbackEvaluation,
+            difficulty,
+            userCode
+        });
+        let tokenBalance = null;
+
+        const parsedUserId = parseOptionalUserId(userId);
+        if (parsedUserId) {
+            const userUpdate = await db.collection('users').findOneAndUpdate(
+                { _id: parsedUserId },
+                {
+                    $inc: {
+                        tokenBalance: tokenAward,
+                        totalTokensEarned: tokenAward
+                    }
+                },
+                { returnDocument: 'after' }
+            );
+
+            tokenBalance = userUpdate?.value?.tokenBalance ?? null;
+        }
         res.json({ 
             ...fallbackEvaluation,
+            tokenAward,
+            tokenBalance,
+            tokenBreakdown,
             responseTime: Date.now() - startTime,
             details: error.message
         });
+    }
+});
+
+// Save aptitude test summary results
+app.post('/api/aptitude-results', async (req, res) => {
+    const { userId, results } = req.body;
+
+    if (!results) {
+        return res.status(400).json({ error: 'Missing results payload' });
+    }
+
+    try {
+        const parsedUserId = parseOptionalUserId(userId);
+        const payload = {
+            userId: userId || 'anonymous',
+            ...results,
+            createdAt: new Date()
+        };
+
+        await db.collection('aptitude_results').insertOne(payload);
+
+        let tokenBalance = null;
+
+        if (parsedUserId) {
+            const userUpdate = await db.collection('users').findOneAndUpdate(
+                { _id: parsedUserId },
+                {
+                    $set: {
+                        aptitudeCompleted: true,
+                        latestAptitudeScore: results.score,
+                        latestAptitudeLevel: results.level,
+                        latestAptitudeAt: new Date()
+                    }
+                },
+                { returnDocument: 'after' }
+            );
+
+            tokenBalance = userUpdate?.value?.tokenBalance ?? null;
+        }
+
+        res.json({
+            success: true,
+            tokenBalance
+        });
+    } catch (error) {
+        console.error('Failed to save aptitude results:', error);
+        res.status(500).json({ error: 'Failed to save aptitude results' });
+    }
+});
+
+// Fetch current token balance for a user
+app.get('/api/users/:userId/tokens', async (req, res) => {
+    const { userId } = req.params;
+
+    if (!ObjectId.isValid(userId)) {
+        return res.status(400).json({ error: 'Invalid userId' });
+    }
+
+    try {
+        const user = await db.collection('users').findOne(
+            { _id: new ObjectId(userId) },
+            { projection: { tokenBalance: 1, totalTokensEarned: 1 } }
+        );
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({
+            tokenBalance: user.tokenBalance || 0,
+            totalTokensEarned: user.totalTokensEarned || 0
+        });
+    } catch (error) {
+        console.error('Failed to fetch token balance:', error);
+        res.status(500).json({ error: 'Failed to fetch token balance' });
     }
 });
 

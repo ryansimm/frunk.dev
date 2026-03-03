@@ -28,3 +28,8 @@ nav ul li{
     margin: 5px 20px;
     font-size: 16px;
 }
+
+.token-display {
+    color: white;
+    font-weight: 600;
+}
