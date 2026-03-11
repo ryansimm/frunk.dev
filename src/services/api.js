@@ -41,13 +41,14 @@ export const apiService ={
     },
 
     // Evaluate aptitude test code
-    evaluateAptitudeCode: async (userCode, question, difficulty, testCases, userId) => {
+    evaluateAptitudeCode: async (userCode, question, difficulty, testCases, userId, codeTemplate) => {
         const response = await axios.post(`${API_BASE_URL}/evaluate-aptitude-code`, {
             userCode,
             question,
             difficulty,
             testCases,
-            userId
+            userId,
+            codeTemplate
         });
         return response.data;
     },

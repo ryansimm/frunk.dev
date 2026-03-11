@@ -120,14 +120,116 @@ function getFallbackAdaptiveQuestion(difficulty, questionNumber) {
     };
 }
 
-function getFallbackEvaluation(userCode) {
+function normalizeCodeForTemplateComparison(code) {
+    return (code || '')
+        .replace(/#.*$/gm, '')
+        .replace(/\s+/g, '')
+        .trim()
+        .toLowerCase();
+}
+
+function isSubmissionNearTemplate(userCode, codeTemplate) {
+    if (!codeTemplate) {
+        return false;
+    }
+
+    const normalizedUser = normalizeCodeForTemplateComparison(userCode);
+    const normalizedTemplate = normalizeCodeForTemplateComparison(codeTemplate);
+
+    if (!normalizedUser || !normalizedTemplate) {
+        return false;
+    }
+
+    return normalizedUser === normalizedTemplate;
+}
+
+function stripTemplateScaffoldArtifacts(userCode, codeTemplate) {
+    if (!codeTemplate) {
+        return userCode || '';
+    }
+
+    const templateLineSet = new Set(
+        (codeTemplate || '')
+            .split('\n')
+            .map((line) => line.trim().toLowerCase())
+            .filter(Boolean)
+    );
+
+    const scaffoldTokens = new Set(['# your code here', '#your code here', 'pass']);
+
+    return (userCode || '')
+        .split('\n')
+        .filter((line) => {
+            const normalized = line.trim().toLowerCase();
+            if (!normalized) {
+                return true;
+            }
+
+            const isScaffoldLine = scaffoldTokens.has(normalized) && templateLineSet.has(normalized);
+            return !isScaffoldLine;
+        })
+        .join('\n');
+}
+
+function getCorrectnessScoreFloor(difficulty) {
+    const level = (difficulty || 'easy').toLowerCase();
+    if (level === 'hard') return 92;
+    if (level === 'medium') return 88;
+    return 84;
+}
+
+function buildDetailedFeedback({ feedback, score, difficulty, issues, strengths, isCorrect }) {
+    const normalizedFeedback = (feedback || '').trim();
+    const looksGeneric = !normalizedFeedback
+        || normalizedFeedback.length < 120
+        || /good effort|needs improvement|not yet strong enough|try again/i.test(normalizedFeedback);
+
+    if (!looksGeneric) {
+        return normalizedFeedback;
+    }
+
+    const topStrengths = (strengths || []).slice(0, 2);
+    const topIssues = (issues || []).slice(0, 3);
+
+    const base = [
+        `Difficulty: ${(difficulty || 'unknown').toUpperCase()}.`,
+        `Score: ${score}/100.`
+    ];
+
+    if (isCorrect) {
+        base.push('Your solution passes the current quality checks and is marked correct.');
+    } else {
+        base.push('Your solution is not marked correct yet based on the current checks.');
+    }
+
+    if (topStrengths.length > 0) {
+        base.push(`What works well: ${topStrengths.join(' ')}`);
+    }
+
+    if (topIssues.length > 0) {
+        base.push(`Main gaps to address: ${topIssues.join(' ')}`);
+    }
+
+    if (!isCorrect) {
+        base.push('Next step: update the core logic first, then re-run with edge cases (empty input, single item, and repeated values where relevant).');
+    }
+
+    return base.join(' ');
+}
+
+function getFallbackEvaluation(userCode, codeTemplate, difficulty) {
     const code = (userCode || '').trim();
+    const nonTemplateCode = stripTemplateScaffoldArtifacts(code, codeTemplate).trim();
     const hasCode = code.length > 0;
     const hasDef = /\bdef\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(/.test(code);
     const hasReturn = /\breturn\b/.test(code);
-    const hasPlaceholder = /\bpass\b|todo|your code here/i.test(code);
+    const hasPlaceholder = /\bpass\b|todo|your code here/i.test(nonTemplateCode);
     const hasControlFlow = /\bfor\b|\bwhile\b|\bif\b|\belif\b|\btry\b/.test(code);
     const hasUsefulOps = /\bsort\b|\bsorted\b|\bappend\b|\bcount\b|\bdict\b|\bset\b|\blen\b/.test(code);
+    const hasComprehension = /\[[^\]]+\bfor\b[^\]]+\]|\{[^}]+\bfor\b[^}]+\}/.test(code);
+    const hasErrorHandling = /\btry\b[\s\S]*\bexcept\b/.test(code);
+    const isEasy = (difficulty || 'easy').toLowerCase() === 'easy';
+    const isTemplateOnly = isSubmissionNearTemplate(code, codeTemplate);
 
     const issues = [];
     const strengths = [];
@@ -143,56 +245,100 @@ function getFallbackEvaluation(userCode) {
         };
     }
 
-    let score = 10;
+    let score = 0;
+
     if (hasDef) {
-        score += 20;
-        strengths.push('Defines a Python function.');
+        strengths.push('Provides a function-based solution format.');
     } else {
         issues.push('Missing a clear function definition.');
     }
 
     if (hasReturn) {
-        score += 20;
+        score += 8;
         strengths.push('Includes a return statement.');
     } else {
         issues.push('Missing return logic for final output.');
     }
 
-    if (code.length >= 80) {
-        score += 20;
+    if (code.length >= 140) {
+        score += 14;
+        strengths.push('Shows substantial implementation detail.');
+    } else if (code.length >= 90) {
+        score += 8;
     } else {
         issues.push('Solution is very short and may be incomplete.');
     }
 
-    if (hasControlFlow) score += 15;
-    if (hasUsefulOps) score += 15;
+    if (hasControlFlow) {
+        score += 10;
+        strengths.push('Uses control flow to handle logic paths.');
+    }
+
+    if (hasUsefulOps || hasComprehension) {
+        score += 8;
+        strengths.push('Uses meaningful Python operations/data handling.');
+    }
+
+    if (hasErrorHandling) {
+        score += 5;
+        strengths.push('Includes basic error handling.');
+    }
 
     if (hasPlaceholder) {
-        score = Math.min(score, 25);
+        score = Math.min(score, 12);
         issues.push('Contains placeholder or incomplete logic (e.g., pass/TODO).');
     }
 
+    if (isTemplateOnly) {
+        score = Math.min(score, 15);
+        issues.push('Submission is still almost the same as the provided template scaffold.');
+    }
+
+    if (!isEasy && !hasControlFlow && code.length < 160) {
+        score = Math.min(score, 35);
+        issues.push('Missing clear algorithmic steps beyond structure/template.');
+    }
+
+    if (!isEasy && !hasUsefulOps && !hasComprehension) {
+        score = Math.min(score, 55);
+        issues.push('Implementation lacks concrete data-processing logic.');
+    }
+
     score = Math.max(0, Math.min(100, score));
-    const isCorrect = score >= 80 && issues.length === 0 && hasDef && hasReturn && !hasPlaceholder;
+    const isCorrect = score >= 88 && issues.length === 0 && hasDef && hasReturn && !hasPlaceholder && (isEasy || hasControlFlow);
+    const feedback = buildDetailedFeedback({
+        feedback: isCorrect
+            ? 'Solution appears complete under fallback structural checks.'
+            : 'Solution needs stronger implementation detail under fallback checks.',
+        score,
+        difficulty,
+        issues,
+        strengths,
+        isCorrect
+    });
 
     return {
         isCorrect,
         score,
-        feedback: isCorrect
-            ? 'Structured solution detected. This fallback result is provisional; AI evaluation will provide stricter semantic grading once available.'
-            : 'Your solution needs stronger implementation detail. Add complete logic and ensure it clearly returns the correct result.',
+        feedback,
         issues,
         strengths,
         fallback: true
     };
 }
 
-function normalizeEvaluationResult(evaluationData, userCode) {
+function normalizeEvaluationResult(evaluationData, userCode, codeTemplate, difficulty) {
     const code = (userCode || '').trim();
+    const nonTemplateCode = stripTemplateScaffoldArtifacts(code, codeTemplate).trim();
     const hasDef = /\bdef\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(/.test(code);
     const hasReturn = /\breturn\b/.test(code);
-    const hasPlaceholder = /\bpass\b|todo|your code here/i.test(code);
-    const isVeryShort = code.length < 40;
+    const hasPlaceholder = /\bpass\b|todo|your code here/i.test(nonTemplateCode);
+    const isVeryShort = nonTemplateCode.length < 40;
+    const hasControlFlow = /\bfor\b|\bwhile\b|\bif\b|\belif\b|\btry\b/.test(code);
+    const hasDataOps = /\bsort\b|\bsorted\b|\bappend\b|\bcount\b|\bdict\b|\bset\b|\blen\b|\bany\b|\ball\b|\benumerate\b|\bzip\b/.test(code);
+    const hasComprehension = /\[[^\]]+\bfor\b[^\]]+\]|\{[^}]+\bfor\b[^}]+\}/.test(code);
+    const isEasy = (difficulty || 'easy').toLowerCase() === 'easy';
+    const isTemplateOnly = isSubmissionNearTemplate(code, codeTemplate);
 
     let score = Number.isFinite(Number(evaluationData?.score)) ? Number(evaluationData.score) : 0;
     score = Math.max(0, Math.min(100, score));
@@ -220,22 +366,58 @@ function normalizeEvaluationResult(evaluationData, userCode) {
     }
 
     if (isVeryShort) {
-        score = Math.min(score, 50);
+        score = Math.min(score, 35);
         issues.push('Code is too short to demonstrate a complete solution.');
     }
 
-    if (issues.length >= 2) {
-        score = Math.min(score, 70);
+    if (isTemplateOnly) {
+        score = Math.min(score, 20);
+        issues.push('Submission mostly matches scaffold/template without implementation depth.');
     }
 
-    const isCorrect = Boolean(evaluationData?.isCorrect) && score >= 85 && issues.length === 0;
+    if (!isEasy && !hasControlFlow && code.length < 160) {
+        score = Math.min(score, 45);
+        issues.push('Insufficient algorithmic logic detected for this solution.');
+    }
+
+    if (!isEasy && !hasDataOps && !hasComprehension) {
+        score = Math.min(score, 70);
+        issues.push('Limited concrete data-processing operations detected.');
+    }
+
+    if (issues.length >= 2) {
+        score = Math.min(score, 62);
+    }
+
+    if (issues.length >= 4) {
+        score = Math.min(score, 50);
+    }
+
+    if (!Array.isArray(evaluationData?.strengths) || evaluationData.strengths.length === 0) {
+        score = Math.min(score, 78);
+    }
+
+    const modelMarkedCorrect = Boolean(evaluationData?.isCorrect);
+
+    if (modelMarkedCorrect) {
+        score = Math.max(score, getCorrectnessScoreFloor(difficulty));
+    }
+
+    const isCorrect = modelMarkedCorrect && !isTemplateOnly && hasDef && hasReturn && !hasPlaceholder;
+
+    const finalFeedback = buildDetailedFeedback({
+        feedback: evaluationData?.feedback,
+        score,
+        difficulty,
+        issues,
+        strengths,
+        isCorrect
+    });
 
     return {
         isCorrect,
         score,
-        feedback: evaluationData?.feedback || (isCorrect
-            ? 'Correct solution with strong implementation quality.'
-            : 'Solution is not yet strong enough for full credit. Improve correctness and completeness.'),
+        feedback: finalFeedback,
         issues,
         strengths
     };
@@ -605,7 +787,7 @@ Make the question engaging and practical. Include clear examples.`;
 
 // Evaluate code submission for aptitude test
 app.post('/api/evaluate-aptitude-code', async (req, res) => {
-    const { userCode, question, difficulty, testCases, userId } = req.body;
+    const { userCode, question, difficulty, testCases, userId, codeTemplate } = req.body;
 
     const startTime = Date.now();
 
@@ -626,7 +808,7 @@ Evaluate the code and respond with ONLY valid JSON:
 {
   "isCorrect": true/false,
   "score": 0-100,
-  "feedback": "Brief constructive feedback (2-3 sentences)",
+    "feedback": "Detailed constructive feedback (4-7 sentences) referencing the submitted logic quality, likely failing edge cases, and one concrete next fix",
   "issues": ["Issue 1", "Issue 2"] or [],
   "strengths": ["Strength 1"] or []
 }
@@ -639,13 +821,15 @@ Strict grading rubric (very important):
 - 0: Empty or irrelevant submission.
 
 Rules:
-- If code contains placeholders like "pass" or TODO, score must be <= 25 and isCorrect=false.
+- If code only keeps scaffold placeholders like "# your code here" and "pass" without real added logic, score must be <= 25 and isCorrect=false.
+- If placeholders are only inherited from the provided template and the user adds correct logic, do not penalize for those scaffold lines.
 - If required logic is missing or test cases would fail, isCorrect=false.
 - Do not award high scores for boilerplate structure alone.
+- Feedback must be specific and technical (avoid generic encouragement-only phrases).
 - Be strict and conservative with scoring.`;
 
     const { json: rawEvaluationData } = await generateJsonWithFallback(prompt, JSON_RESPONSE_MODELS);
-    const evaluationData = normalizeEvaluationResult(rawEvaluationData, userCode);
+    const evaluationData = normalizeEvaluationResult(rawEvaluationData, userCode, codeTemplate, difficulty);
     const { tokenAward, tokenBreakdown } = calculateTokenAward({
         evaluationData,
         difficulty,
@@ -694,7 +878,7 @@ Rules:
 
     } catch (error) {
         console.error('Code evaluation error:', error);
-        const fallbackEvaluation = getFallbackEvaluation(userCode);
+        const fallbackEvaluation = getFallbackEvaluation(userCode, codeTemplate, difficulty);
         const { tokenAward, tokenBreakdown } = calculateTokenAward({
             evaluationData: fallbackEvaluation,
             difficulty,

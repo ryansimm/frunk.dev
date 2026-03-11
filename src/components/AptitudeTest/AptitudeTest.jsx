@@ -104,7 +104,8 @@ const AptitudeTest = () => {
         currentQuestion.question,
         currentDifficulty,
         currentQuestion.testCases || [],
-        user?.userId
+        user?.userId,
+        currentQuestion.codeTemplate || ''
       );
 
       setEvaluation(data);
@@ -205,16 +206,103 @@ const AptitudeTest = () => {
   };
 
   const handleTabKey = (event) => {
-    if (event.key === 'Tab') {
+    const INDENT = '    ';
+
+    if (event.key === 'Enter') {
       event.preventDefault();
       const start = event.target.selectionStart;
       const end = event.target.selectionEnd;
-      const newCode = userCode.substring(0, start) + '  ' + userCode.substring(end);
+      const before = userCode.substring(0, start);
+      const after = userCode.substring(end);
+      const currentLineStart = before.lastIndexOf('\n') + 1;
+      const currentLine = before.substring(currentLineStart);
+      const leadingWhitespace = currentLine.match(/^\s*/)?.[0] || '';
+      const shouldIncreaseIndent = /:\s*$/.test(currentLine.trim());
+      const nextIndent = shouldIncreaseIndent ? `${leadingWhitespace}${INDENT}` : leadingWhitespace;
+      const insertText = `\n${nextIndent}`;
+      const newCode = `${before}${insertText}${after}`;
+
       setUserCode(newCode);
       setTimeout(() => {
-        event.target.selectionStart = event.target.selectionEnd = start + 2;
+        const cursorPos = start + insertText.length;
+        event.target.selectionStart = cursorPos;
+        event.target.selectionEnd = cursorPos;
       }, 0);
+      return;
     }
+
+    if (event.key !== 'Tab') {
+      return;
+    }
+
+    event.preventDefault();
+    const start = event.target.selectionStart;
+    const end = event.target.selectionEnd;
+    const hasSelection = start !== end;
+
+    if (hasSelection) {
+      const selectionStartLine = userCode.lastIndexOf('\n', start - 1) + 1;
+      const selectionEndLineBreak = userCode.indexOf('\n', end);
+      const selectionEndLine = selectionEndLineBreak === -1 ? userCode.length : selectionEndLineBreak;
+      const selectedBlock = userCode.substring(selectionStartLine, selectionEndLine);
+      const selectedLines = selectedBlock.split('\n');
+
+      let adjustedLines;
+      if (event.shiftKey) {
+        adjustedLines = selectedLines.map((line) => {
+          if (line.startsWith(INDENT)) return line.slice(INDENT.length);
+          if (line.startsWith('  ')) return line.slice(2);
+          return line.replace(/^\s/, '');
+        });
+      } else {
+        adjustedLines = selectedLines.map((line) => `${INDENT}${line}`);
+      }
+
+      const replacement = adjustedLines.join('\n');
+      const newCode = `${userCode.substring(0, selectionStartLine)}${replacement}${userCode.substring(selectionEndLine)}`;
+      setUserCode(newCode);
+
+      setTimeout(() => {
+        const selectionDelta = replacement.length - selectedBlock.length;
+        event.target.selectionStart = selectionStartLine;
+        event.target.selectionEnd = end + selectionDelta;
+      }, 0);
+      return;
+    }
+
+    if (event.shiftKey) {
+      const lineStart = userCode.lastIndexOf('\n', start - 1) + 1;
+      const linePrefix = userCode.substring(lineStart, start);
+      let charsToRemove = 0;
+
+      if (linePrefix.endsWith(INDENT)) {
+        charsToRemove = INDENT.length;
+      } else {
+        const whitespaceMatch = linePrefix.match(/\s+$/);
+        if (whitespaceMatch) {
+          charsToRemove = Math.min(whitespaceMatch[0].length, INDENT.length);
+        }
+      }
+
+      if (charsToRemove > 0) {
+        const newCode = `${userCode.substring(0, start - charsToRemove)}${userCode.substring(end)}`;
+        setUserCode(newCode);
+        setTimeout(() => {
+          const cursorPos = start - charsToRemove;
+          event.target.selectionStart = cursorPos;
+          event.target.selectionEnd = cursorPos;
+        }, 0);
+      }
+      return;
+    }
+
+    const newCode = `${userCode.substring(0, start)}${INDENT}${userCode.substring(end)}`;
+    setUserCode(newCode);
+    setTimeout(() => {
+      const cursorPos = start + INDENT.length;
+      event.target.selectionStart = cursorPos;
+      event.target.selectionEnd = cursorPos;
+    }, 0);
   };
 
   // Test intro screen
