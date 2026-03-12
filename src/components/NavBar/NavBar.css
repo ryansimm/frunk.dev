@@ -1,15 +1,19 @@
-nav{
+nav.container-2{
     width : 100%;
-    /*background: rgb(60, 60, 60);*/ 
+    min-height: var(--navbar-height);
+    background: rgba(64, 61, 86, 0.96);
     color : white;
     padding : 4px 0;
     position: fixed;
     top : 0;
-    left: 0 ;
+    left: 0;
+    right: 0;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: space-between;
     z-index: 5;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
 }
 .logo{
     width: 100px;

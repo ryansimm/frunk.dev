@@ -119,15 +119,43 @@ const AptitudeTest = () => {
         score: data.score,
         tokenAward: data.tokenAward || 0
       };
-      
-      setQuestionHistory([...questionHistory, questionResult]);
-      
-      if (data.isCorrect) {
+
+      const previousQuestionResult = questionHistory.find(
+        (entry) => entry.questionNumber === currentQuestionNumber
+      );
+
+      const nextQuestionHistory = previousQuestionResult
+        ? questionHistory.map((entry) => (
+          entry.questionNumber === currentQuestionNumber ? questionResult : entry
+        ))
+        : [...questionHistory, questionResult];
+
+      setQuestionHistory(nextQuestionHistory);
+
+      const wasPreviouslyCorrect = Boolean(previousQuestionResult?.isCorrect);
+      const isNowCorrect = Boolean(data.isCorrect);
+      const nextCorrectAnswers = isNowCorrect
+        ? (wasPreviouslyCorrect ? correctAnswers : correctAnswers + 1)
+        : (wasPreviouslyCorrect ? Math.max(0, correctAnswers - 1) : correctAnswers);
+
+      if (!wasPreviouslyCorrect && isNowCorrect) {
         setCorrectAnswers(prev => prev + 1);
+      } else if (wasPreviouslyCorrect && !isNowCorrect) {
+        setCorrectAnswers(prev => Math.max(0, prev - 1));
       }
 
       if (Number.isFinite(data.tokenBalance)) {
         updateStoredTokenBalance(data.tokenBalance);
+      }
+
+      if (currentQuestionNumber >= TOTAL_QUESTIONS) {
+        await completeTest(nextQuestionHistory, nextCorrectAnswers);
+      } else {
+        await loadNextQuestion(
+          currentQuestionNumber + 1,
+          data.isCorrect,
+          currentDifficulty
+        );
       }
       
     } catch (error) {
@@ -136,18 +164,6 @@ const AptitudeTest = () => {
     }
     
     setEvaluatingCode(false);
-  };
-
-  const handleNextQuestion = async () => {
-    if (currentQuestionNumber >= TOTAL_QUESTIONS) {
-      completeTest();
-    } else {
-      await loadNextQuestion(
-        currentQuestionNumber + 1,
-        evaluation.isCorrect,
-        currentDifficulty
-      );
-    }
   };
 
   const handleSkipQuestion = async () => {
@@ -163,7 +179,20 @@ const AptitudeTest = () => {
       skipped: true
     };
 
-    const updatedHistory = [...questionHistory, questionResult];
+    const previousQuestionResult = questionHistory.find(
+      (entry) => entry.questionNumber === currentQuestionNumber
+    );
+
+    const updatedHistory = previousQuestionResult
+      ? questionHistory.map((entry) => (
+        entry.questionNumber === currentQuestionNumber ? questionResult : entry
+      ))
+      : [...questionHistory, questionResult];
+
+    if (previousQuestionResult?.isCorrect) {
+      setCorrectAnswers(prev => Math.max(0, prev - 1));
+    }
+
     setQuestionHistory(updatedHistory);
 
     if (currentQuestionNumber >= TOTAL_QUESTIONS) {
@@ -178,17 +207,36 @@ const AptitudeTest = () => {
     );
   };
 
-  const completeTest = async (finalQuestionHistory = questionHistory) => {
+  const handleEndTestEarly = async () => {
+    if (evaluatingCode || loadingQuestion || currentQuestionNumber < 5) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'End the aptitude test now? Your score will be based on the questions completed so far.'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    await completeTest(questionHistory);
+  };
+
+  const completeTest = async (
+    finalQuestionHistory = questionHistory,
+    finalCorrectAnswers = correctAnswers
+  ) => {
     setTestComplete(true);
     
     // Calculate final score
-    const totalScore = Math.round((correctAnswers / TOTAL_QUESTIONS) * 100);
+    const totalScore = Math.round((finalCorrectAnswers / TOTAL_QUESTIONS) * 100);
     const level = getUserLevel(totalScore);
     
     const results = {
       score: totalScore,
       level: level.label,
-      correctAnswers,
+      correctAnswers: finalCorrectAnswers,
       totalQuestions: TOTAL_QUESTIONS,
       questionHistory: finalQuestionHistory
     };
@@ -425,6 +473,22 @@ const AptitudeTest = () => {
         </div>
       </div>
 
+      <div className="end-test-wrapper">
+        {currentQuestionNumber < 5 && (
+          <p className="end-test-note">End Test Early becomes available after Question 5.</p>
+        )}
+
+        {currentQuestionNumber >= 5 && (
+          <button
+            className="end-test-button"
+            onClick={handleEndTestEarly}
+            disabled={evaluatingCode || loadingQuestion}
+          >
+            End Test Early
+          </button>
+        )}
+      </div>
+
       <div className="question-container">
         <div className="question-header">
           <span className="difficulty-badge">
@@ -533,12 +597,7 @@ const AptitudeTest = () => {
                   </div>
                 )}
 
-                <button 
-                  className="next-button" 
-                  onClick={handleNextQuestion}
-                >
-                  {currentQuestionNumber === TOTAL_QUESTIONS ? 'See Results' : 'Next Question →'}
-                </button>
+                <p className="auto-advance-note">Preparing your next adaptive question...</p>
               </div>
             )}
           </div>

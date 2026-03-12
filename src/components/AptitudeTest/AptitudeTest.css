@@ -11,20 +11,33 @@
   background-repeat: no-repeat;
 }
 
-.test-intro,
-.test-results {
+.test-intro,.test-results {
   background: white;
   width: 92%;
   max-width: 900px;
   padding: 20px;
 }
 
-.test-header,
-.question-container {
+.test-header,.question-container {
   background: white;
   width: 95%;
   max-width: 1100px;
   padding: 20px;
+}
+
+.end-test-wrapper {
+  width: 95%;
+  max-width: 1100px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.end-test-note {
+  margin: 0;
+  color: white;
+  font-size: 0.9rem;
 }
 
 .test-info {
@@ -38,13 +51,22 @@
   flex: 1 1 200px;
 }
 
-.button-start-test, .continue-button, .next-button, .submit-button, .skip-button {
+.button-start-test, .continue-button, .next-button, .submit-button, .skip-button, .retry-button {
   width: 100%;
   padding: 10px;
   border: 1px solid #ddd;
   background: #f2f2f2;
   cursor: pointer;
   margin-top: 10px;
+}
+
+.end-test-button {
+  width: auto;
+  min-width: 170px;
+  padding: 10px 14px;
+  border: 1px solid #ddd;
+  background: #f2f2f2;
+  cursor: pointer;
 }
 
 .test-header {
@@ -96,6 +118,7 @@
 }
 
 .option.correct { background: #e6f4ea; }
+
 .option.incorrect { background: #fdecea; }
 
 .code-editor {
@@ -194,8 +217,7 @@
   gap: 10px;
 }
 
-.action-buttons .submit-button,
-.action-buttons .skip-button {
+.action-buttons .submit-button, .action-buttons .skip-button {
   margin-top: 0;
 }
 
@@ -294,21 +316,23 @@
   font-weight: 600;
 }
 
-.feedback,
-.strengths,
-.issues {
+.feedback,.strengths,.issues {
   margin-top: 15px;
 }
 
-.feedback h4,
-.strengths h4,
-.issues h4 {
+.auto-advance-note {
+  margin-top: 16px;
+  margin-bottom: 0;
+  color: #555;
+  font-style: italic;
+}
+
+.feedback h4,.strengths h4,.issues h4 {
   margin-bottom: 8px;
   color: #333;
 }
 
-.strengths ul,
-.issues ul {
+.strengths ul,.issues ul {
   margin: 10px 0;
   padding-left: 25px;
 }

@@ -68,20 +68,22 @@ const AppContent = () => {
   }
 
   return (
-    <div>
+    <div className="app-shell">
       <NavBar userLevel={userLevel} tokenBalance={tokenBalance} />
-      <Routes>
-        <Route path="/" element={
-          <>
-            <Body />
-            <div className="container"><Sections /></div>
-          </>
-        } />
-        <Route path="/aptitude-test" element={
-          <AptitudeTest onTestComplete={handleTestComplete} />
-        } />
-        <Route path="/profile" element={<UserProfile />} />
-      </Routes>
+      <main className="app-content">
+        <Routes>
+          <Route path="/" element={
+            <>
+              <Body />
+              <div className="container"><Sections /></div>
+            </>
+          } />
+          <Route path="/aptitude-test" element={
+            <AptitudeTest onTestComplete={handleTestComplete} />
+          } />
+          <Route path="/profile" element={<UserProfile />} />
+        </Routes>
+      </main>
     </div>
   )
 }
