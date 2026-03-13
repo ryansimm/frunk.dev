@@ -30,14 +30,15 @@ export const apiService ={
     },
 
     // Generate adaptive question
-    generateAdaptiveQuestion: async (questionNumber, lastAnswerCorrect, currentDifficulty, userId) => {
+    generateAdaptiveQuestion: async (questionNumber, lastAnswerCorrect, currentDifficulty, userId, askedTopics = []) => {
         const response = await axios.post(`${API_BASE_URL}/generate-adaptive-question`, {
             questionNumber,
             lastAnswerCorrect,
             currentDifficulty,
-            userId
-    });
-    return response.data;
+            userId,
+            askedTopics
+        });
+        return response.data;
     },
 
     // Evaluate aptitude test code

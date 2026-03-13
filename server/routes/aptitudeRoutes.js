@@ -16,43 +16,46 @@ export function createAptitudeRoutes({
     const router = express.Router();
 
     router.post('/generate-adaptive-question', async (req, res) => {
-        const { questionNumber, lastAnswerCorrect, currentDifficulty, userId } = req.body;
+        const { questionNumber, lastAnswerCorrect, currentDifficulty, userId, askedTopics = [] } = req.body;
 
         const startTime = Date.now();
         const nextDifficulty = resolveNextDifficulty(questionNumber, lastAnswerCorrect, currentDifficulty);
 
+        const avoidClause = askedTopics.length > 0
+            ? `\n\nIMPORTANT: Do NOT reuse or closely resemble any of these already-asked topics: ${askedTopics.join(', ')}. Pick a completely different concept.`
+            : '';
+
         try {
-            const prompt = `You are creating a Python coding challenge for an adaptive aptitude test. Generate a ${nextDifficulty} difficulty question.
+            const prompt = `You are creating a Python coding challenge for an adaptive aptitude test. Generate a UNIQUE ${nextDifficulty} difficulty question.
 
 Difficulty guidelines:
 - EASY: Basic syntax, simple loops, basic functions (beginner level)
 - MEDIUM: Functions with parameters, list operations, string manipulation, conditionals (intermediate level)
 - HARD: Algorithms, recursion, classes, complex data structures (advanced level)
 
-Generate question #${questionNumber} of 12.
+This is question #${questionNumber} of 12. Each question must cover a DIFFERENT Python concept or problem type. Vary the problem style — use different data structures, algorithms, and problem domains each time.${avoidClause}
 
 Return ONLY valid JSON in this exact format:
 {
   "question": "Clear problem description with example input/output",
   "codeTemplate": "def function_name():\\n    # Your code here\\n    pass",
-  "difficulty": "${nextDifficulty}",
   "hints": ["Hint 1", "Hint 2"],
   "testCases": [
     {"input": "example input", "expected": "expected output"},
     {"input": "edge case", "expected": "expected output"}
   ]
-}
-
-Make the question engaging and practical. Include clear examples.`;
+}`;
 
             const { json: questionData, modelName } = await generateJsonWithFallback(prompt, jsonModels);
             const responseTime = Date.now() - startTime;
 
+            // Always use server-computed difficulty — never trust the AI-returned value
+            const safeQuestion = { ...questionData, difficulty: nextDifficulty };
+
             const dbEntry = {
                 userId: userId || 'anonymous',
                 questionNumber,
-                difficulty: nextDifficulty,
-                ...questionData,
+                ...safeQuestion,
                 model: modelName,
                 createdAt: new Date(),
                 responseTime
@@ -61,7 +64,7 @@ Make the question engaging and practical. Include clear examples.`;
             const insertResult = await db.collection('aptitude_questions').insertOne(dbEntry);
 
             res.json({
-                ...questionData,
+                ...safeQuestion,
                 id: insertResult.insertedId,
                 questionNumber,
                 responseTime

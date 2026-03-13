@@ -34,7 +34,11 @@ const AptitudeTest = () => {
   // Progress tracking
   const [questionHistory, setQuestionHistory] = useState([]);
   const [correctAnswers, setCorrectAnswers] = useState(0);
-  
+  const [askedTopics, setAskedTopics] = useState([]);
+
+  // Pending next-question advance (set after evaluation so user can read feedback first)
+  const [pendingNext, setPendingNext] = useState(null);
+
   // Loading states
   const [loadingQuestion, setLoadingQuestion] = useState(false);
   const [evaluatingCode, setEvaluatingCode] = useState(false);
@@ -61,26 +65,31 @@ const AptitudeTest = () => {
 
   const handleStartTest = async () => {
     setTestStarted(true);
-    await loadNextQuestion(1, null, 'easy');
+    setAskedTopics([]);
+    await loadNextQuestion(1, null, 'easy', []);
   };
 
-  const loadNextQuestion = async (questionNumber, lastCorrect, difficulty) => {
+  const loadNextQuestion = async (questionNumber, lastCorrect, difficulty, topicsOverride) => {
     setLoadingQuestion(true);
     setEvaluation(null);
     setAnswered(false);
+    const topicsToAvoid = topicsOverride !== undefined ? topicsOverride : askedTopics;
     
     try {
       const data = await apiService.generateAdaptiveQuestion(
         questionNumber,
         lastCorrect,
         difficulty,
-        user?.userId
+        user?.userId,
+        topicsToAvoid
       );
       
       setCurrentQuestion(data);
       setCurrentDifficulty(data.difficulty);
       setUserCode(data.codeTemplate || '');
       setCurrentQuestionNumber(questionNumber);
+      // Record this question so the next call can avoid its topic
+      setAskedTopics(prev => [...prev, (data.question || '').substring(0, 100)]);
     } catch (error) {
       console.error('Failed to load question:', error);
       alert('Failed to load question. Please try again.');
@@ -148,15 +157,8 @@ const AptitudeTest = () => {
         updateStoredTokenBalance(data.tokenBalance);
       }
 
-      if (currentQuestionNumber >= TOTAL_QUESTIONS) {
-        await completeTest(nextQuestionHistory, nextCorrectAnswers);
-      } else {
-        await loadNextQuestion(
-          currentQuestionNumber + 1,
-          data.isCorrect,
-          currentDifficulty
-        );
-      }
+      // Store what to do next so the user can read feedback before advancing
+      setPendingNext({ nextQuestionHistory, nextCorrectAnswers, isCorrect: data.isCorrect });
       
     } catch (error) {
       console.error('Failed to evaluate code:', error);
@@ -164,6 +166,28 @@ const AptitudeTest = () => {
     }
     
     setEvaluatingCode(false);
+  };
+
+  const handleRetryQuestion = () => {
+    setAnswered(false);
+    setEvaluation(null);
+    setPendingNext(null);
+    setUserCode(currentQuestion?.codeTemplate || '');
+  };
+
+  const handleNextQuestion = async () => {
+    if (!pendingNext) return;
+    const { nextQuestionHistory, nextCorrectAnswers, isCorrect } = pendingNext;
+    setPendingNext(null);
+    if (currentQuestionNumber >= TOTAL_QUESTIONS) {
+      await completeTest(nextQuestionHistory, nextCorrectAnswers);
+    } else {
+      await loadNextQuestion(
+        currentQuestionNumber + 1,
+        isCorrect,
+        currentDifficulty
+      );
+    }
   };
 
   const handleSkipQuestion = async () => {
@@ -597,7 +621,24 @@ const AptitudeTest = () => {
                   </div>
                 )}
 
-                <p className="auto-advance-note">Preparing your next adaptive question...</p>
+                <div className="action-buttons">
+                  {!evaluation.isCorrect && (
+                    <button
+                      className="retry-button"
+                      onClick={handleRetryQuestion}
+                      disabled={loadingQuestion}
+                    >
+                      Try Again
+                    </button>
+                  )}
+                  <button
+                    className="next-button"
+                    onClick={handleNextQuestion}
+                    disabled={loadingQuestion}
+                  >
+                    {loadingQuestion ? 'Loading...' : (currentQuestionNumber === TOTAL_QUESTIONS ? 'See Results' : 'Next Question →')}
+                  </button>
+                </div>
               </div>
             )}
           </div>
