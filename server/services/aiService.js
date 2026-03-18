@@ -1,11 +1,21 @@
+/* global process */
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+function getGenAIClient() {
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) {
+        throw new Error('GOOGLE_API_KEY is not configured');
+    }
+
+    return new GoogleGenerativeAI(apiKey);
+}
 
 export const JSON_RESPONSE_MODELS = [
-    process.env.GEMINI_MODEL,
+    (process.env.GEMINI_MODEL || '').replace(/^models\//, ''),
+    'gemini-2.5-flash',
     'gemini-2.0-flash',
-    'gemini-1.5-flash'
+    'gemini-2.0-flash-001',
+    'gemini-flash-latest'
 ].filter(Boolean);
 
 function extractJsonFromModelResponse(rawText) {
@@ -31,6 +41,7 @@ export async function generateJsonWithFallback(prompt, modelNames = JSON_RESPONS
 
     for (const modelName of modelNames) {
         try {
+            const genAI = getGenAIClient();
             const model = genAI.getGenerativeModel({ model: modelName });
             const result = await model.generateContent(prompt);
             const text = result.response.text();
@@ -46,6 +57,7 @@ export async function generateJsonWithFallback(prompt, modelNames = JSON_RESPONS
 }
 
 export async function generateTextWithModel(prompt, modelName = 'gemini-2.0-flash') {
+    const genAI = getGenAIClient();
     const model = genAI.getGenerativeModel({ model: modelName });
     const result = await model.generateContent(prompt);
     return result.response.text();

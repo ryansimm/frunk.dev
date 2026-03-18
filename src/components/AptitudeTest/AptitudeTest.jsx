@@ -1,47 +1,104 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './AptitudeTest.css';
 import { getUserLevel } from '../../utils/levelSystem';
 import { apiService } from '../../services/api';
+import logo from '../../assets/logo.png';
 
 const TOTAL_QUESTIONS = 12;
+const SESSION_VERSION = 1;
 
-const AptitudeTest = () => {
+const getSessionStorageKey = (userId) => `aptitude_test_session_v${SESSION_VERSION}_${userId || 'anonymous'}`;
+
+const loadAptitudeSession = (userId) => {
+  try {
+    const raw = localStorage.getItem(getSessionStorageKey(userId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearAptitudeSession = (userId) => {
+  localStorage.removeItem(getSessionStorageKey(userId));
+};
+
+const AptitudeTest = ({ onTestComplete }) => {
   const navigate = useNavigate();
   const [user] = useState(() => {
     const userData = localStorage.getItem('user');
-    if (!userData) {
-      navigate('/login');
-      return null;
-    }
-    return JSON.parse(userData);
+    return userData ? JSON.parse(userData) : null;
   });
+  const [savedSession] = useState(() => loadAptitudeSession(user?.userId));
   
   // Test state
-  const [testStarted, setTestStarted] = useState(false);
-  const [testComplete, setTestComplete] = useState(false);
+  const [testStarted, setTestStarted] = useState(Boolean(savedSession?.testStarted));
+  const [testComplete, setTestComplete] = useState(Boolean(savedSession?.testComplete));
   
   // Question state
-  const [currentQuestionNumber, setCurrentQuestionNumber] = useState(1);
-  const [currentQuestion, setCurrentQuestion] = useState(null);
-  const [currentDifficulty, setCurrentDifficulty] = useState('easy');
+  const [currentQuestionNumber, setCurrentQuestionNumber] = useState(Number(savedSession?.currentQuestionNumber || 1));
+  const [currentQuestion, setCurrentQuestion] = useState(savedSession?.currentQuestion || null);
+  const [currentDifficulty, setCurrentDifficulty] = useState(savedSession?.currentDifficulty || 'easy');
   
   // Answer state
-  const [userCode, setUserCode] = useState('');
-  const [evaluation, setEvaluation] = useState(null);
-  const [answered, setAnswered] = useState(false);
+  const [userCode, setUserCode] = useState(savedSession?.userCode || '');
+  const [evaluation, setEvaluation] = useState(savedSession?.evaluation || null);
+  const [answered, setAnswered] = useState(Boolean(savedSession?.answered));
   
   // Progress tracking
-  const [questionHistory, setQuestionHistory] = useState([]);
-  const [correctAnswers, setCorrectAnswers] = useState(0);
-  const [askedTopics, setAskedTopics] = useState([]);
+  const [questionHistory, setQuestionHistory] = useState(Array.isArray(savedSession?.questionHistory) ? savedSession.questionHistory : []);
+  const [correctAnswers, setCorrectAnswers] = useState(Number(savedSession?.correctAnswers || 0));
+  const [askedTopics, setAskedTopics] = useState(Array.isArray(savedSession?.askedTopics) ? savedSession.askedTopics : []);
 
   // Pending next-question advance (set after evaluation so user can read feedback first)
-  const [pendingNext, setPendingNext] = useState(null);
+  const [pendingNext, setPendingNext] = useState(savedSession?.pendingNext || null);
 
   // Loading states
   const [loadingQuestion, setLoadingQuestion] = useState(false);
   const [evaluatingCode, setEvaluatingCode] = useState(false);
+
+  useEffect(() => {
+    if (!testStarted) {
+      return;
+    }
+
+    if (testComplete) {
+      clearAptitudeSession(user?.userId);
+      return;
+    }
+
+    const payload = {
+      testStarted,
+      testComplete,
+      currentQuestionNumber,
+      currentQuestion,
+      currentDifficulty,
+      userCode,
+      evaluation,
+      answered,
+      questionHistory,
+      correctAnswers,
+      askedTopics,
+      pendingNext,
+      updatedAt: new Date().toISOString()
+    };
+
+    localStorage.setItem(getSessionStorageKey(user?.userId), JSON.stringify(payload));
+  }, [
+    user?.userId,
+    testStarted,
+    testComplete,
+    currentQuestionNumber,
+    currentQuestion,
+    currentDifficulty,
+    userCode,
+    evaluation,
+    answered,
+    questionHistory,
+    correctAnswers,
+    askedTopics,
+    pendingNext
+  ]);
 
   const updateStoredTokenBalance = (tokenBalance) => {
     if (!Number.isFinite(tokenBalance)) {
@@ -64,8 +121,19 @@ const AptitudeTest = () => {
   };
 
   const handleStartTest = async () => {
+    clearAptitudeSession(user?.userId);
     setTestStarted(true);
+    setTestComplete(false);
+    setCurrentQuestionNumber(1);
+    setCurrentQuestion(null);
+    setCurrentDifficulty('easy');
+    setUserCode('');
+    setEvaluation(null);
+    setAnswered(false);
+    setQuestionHistory([]);
+    setCorrectAnswers(0);
     setAskedTopics([]);
+    setPendingNext(null);
     await loadNextQuestion(1, null, 'easy', []);
   };
 
@@ -264,6 +332,8 @@ const AptitudeTest = () => {
       totalQuestions: TOTAL_QUESTIONS,
       questionHistory: finalQuestionHistory
     };
+
+    onTestComplete?.(results);
     
     // Save to MongoDB
     try {
@@ -459,8 +529,14 @@ const AptitudeTest = () => {
               Your personalized coding challenges will be tailored to your {level.label.toLowerCase()} level.
             </p>
             
-            <button onClick={() => navigate('/')} className="continue-button">
-              Continue to Dashboard
+            <button
+              onClick={() => {
+                clearAptitudeSession(user?.userId);
+                navigate('/challenges');
+              }}
+              className="continue-button"
+            >
+              Continue to Challenges
             </button>
           </div>
         </div>
@@ -487,9 +563,21 @@ const AptitudeTest = () => {
   return (
     <div className="aptitude-test-container">
       <div className="test-header">
-        <div className="test-progress">
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }}></div>
+        <div className="test-header-left">
+          <button
+            type="button"
+            className="home-logo-button"
+            onClick={() => navigate('/')}
+            aria-label="Return to home"
+            title="Return to home"
+          >
+            <img src={logo} alt="Home" className="home-logo-image" />
+          </button>
+
+          <div className="test-progress">
+            <div className="progress-bar">
+              <div className="progress-fill" style={{ width: `${progress}%` }}></div>
+            </div>
           </div>
         </div>
         <div className="score-display">
@@ -622,15 +710,13 @@ const AptitudeTest = () => {
                 )}
 
                 <div className="action-buttons">
-                  {!evaluation.isCorrect && (
-                    <button
-                      className="retry-button"
-                      onClick={handleRetryQuestion}
-                      disabled={loadingQuestion}
-                    >
-                      Try Again
-                    </button>
-                  )}
+                  <button
+                    className="retry-button"
+                    onClick={handleRetryQuestion}
+                    disabled={loadingQuestion}
+                  >
+                    Retry Question
+                  </button>
                   <button
                     className="next-button"
                     onClick={handleNextQuestion}

@@ -1,16 +1,39 @@
-# React + Vite
+# Honours Project
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Authentication Model
 
-Currently, two official plugins are available:
+This project now uses a login-only user flow.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Public user registration is disabled.
+- Users can only access personal profile/results after login.
+- An admin account is automatically seeded on server startup.
+- New user accounts can only be created by an authenticated admin.
 
-## React Compiler
+## Seeded Admin Account
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+On backend startup, `server/routes/authRoutes.js` ensures an admin exists.
 
-## Expanding the ESLint configuration
+Default values (change these in `.env`):
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- `ADMIN_EMAIL=admin@ai-platform.local`
+- `ADMIN_PASSWORD=ChangeMeNow123!`
+- `ADMIN_NAME=Platform Admin`
+- `JWT_SECRET=your-secret-value`
+
+If an account already exists with `ADMIN_EMAIL`, it is elevated to role `admin`.
+
+## Main Auth Endpoints
+
+- `POST /api/auth/login`
+- `GET /api/auth/me` (requires bearer token)
+- `POST /api/auth/register` (admin only, requires bearer token)
+- `GET /api/auth/admin/status` (admin only)
+
+## Run
+
+```bash
+npm install
+npm run dev
+```
+
+Backend runs from `server/server.js` and frontend from Vite.

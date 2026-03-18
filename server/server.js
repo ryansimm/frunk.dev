@@ -5,7 +5,7 @@ import express from 'express';
 
 import { connectToDB, getDb } from './db/mongo.js';
 import { JSON_RESPONSE_MODELS, generateJsonWithFallback, generateTextWithModel } from './services/aiService.js';
-import { getFallbackAdaptiveQuestion, getFallbackMcqQuestion, resolveNextDifficulty } from './services/questionService.js';
+import { getFallbackAdaptiveQuestion, getFallbackMcqQuestion, getFallbackKnowledgeQuestion, resolveNextDifficulty } from './services/questionService.js';
 import { calculateTokenAward, getFallbackEvaluation, normalizeEvaluationResult } from './services/evaluationService.js';
 import { isValidObjectId, parseOptionalUserId, toObjectId } from './utils/userUtils.js';
 import { createSystemRoutes } from './routes/systemRoutes.js';
@@ -33,7 +33,10 @@ async function startServer() {
             generateTextWithModel,
             generateJsonWithFallback,
             jsonModels: JSON_RESPONSE_MODELS,
-            getFallbackMcqQuestion
+            getFallbackMcqQuestion,
+            getFallbackKnowledgeQuestion,
+            getFallbackAdaptiveQuestion,
+            parseOptionalUserId
         }));
         app.use('/api', createAptitudeRoutes({
             db,

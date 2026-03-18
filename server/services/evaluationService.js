@@ -56,50 +56,33 @@ function getCorrectnessScoreFloor(difficulty) {
     return 84;
 }
 
-function getFallbackCorrectnessScoreFloor(difficulty) {
-    const level = (difficulty || 'easy').toLowerCase();
-    if (level === 'hard') return 85;
-    if (level === 'medium') return 80;
-    return 75;
-}
-
 function buildDetailedFeedback({ feedback, score, difficulty, issues, strengths, isCorrect }) {
     const normalizedFeedback = (feedback || '').trim();
-    const looksGeneric = !normalizedFeedback
-        || normalizedFeedback.length < 120
-        || /good effort|needs improvement|not yet strong enough|try again/i.test(normalizedFeedback);
-
-    if (!looksGeneric) {
-        return normalizedFeedback;
-    }
-
-    const topStrengths = (strengths || []).slice(0, 2);
+    const topStrengths = (strengths || []).slice(0, 3);
     const topIssues = (issues || []).slice(0, 3);
 
-    const base = [
-        `Difficulty: ${(difficulty || 'unknown').toUpperCase()}.`,
-        `Score: ${score}/100.`
-    ];
+    const summary = normalizedFeedback || (isCorrect
+        ? 'Your output matches the expected behavior for this question.'
+        : 'Your output does not fully match the expected behavior yet.');
 
-    if (isCorrect) {
-        base.push('Your solution passes the current quality checks and is marked correct.');
-    } else {
-        base.push('Your solution is not marked correct yet based on the current checks.');
-    }
+    const positiveLines = topStrengths.length > 0
+        ? topStrengths
+        : ['Your approach shows progress toward the required output.'];
 
-    if (topStrengths.length > 0) {
-        base.push(`What works well: ${topStrengths.join(' ')}`);
-    }
+    const negativeLines = topIssues.length > 0
+        ? topIssues
+        : ['No major issues were detected in this submission.'];
 
-    if (topIssues.length > 0) {
-        base.push(`Main gaps to address: ${topIssues.join(' ')}`);
-    }
-
-    if (!isCorrect) {
-        base.push('Next step: update the core logic first, then re-run with edge cases (empty input, single item, and repeated values where relevant).');
-    }
-
-    return base.join(' ');
+    return [
+        `Overall: ${isCorrect ? 'Correct' : 'Incorrect'}`,
+        `Difficulty: ${(difficulty || 'unknown').toUpperCase()}`,
+        `Score: ${score}/100`,
+        `Summary: ${summary}`,
+        'Positives:',
+        ...positiveLines.map((line) => `- ${line}`),
+        'Needs improvement:',
+        ...negativeLines.map((line) => `- ${line}`)
+    ].join('\n');
 }
 
 export function getFallbackEvaluation(userCode, codeTemplate, difficulty) {
@@ -193,10 +176,7 @@ export function getFallbackEvaluation(userCode, codeTemplate, difficulty) {
     }
 
     score = Math.max(0, Math.min(100, score));
-    const hasBlockingIssue = !hasDef || !hasReturn || hasPlaceholder || isTemplateOnly;
-    const isCorrect = !hasBlockingIssue
-        && score >= getFallbackCorrectnessScoreFloor(difficulty)
-        && (isEasy || hasControlFlow || hasUsefulOps || hasComprehension);
+    const isCorrect = score >= 40;
 
     const feedback = buildDetailedFeedback({
         feedback: isCorrect
@@ -243,46 +223,43 @@ export function normalizeEvaluationResult(evaluationData, userCode, codeTemplate
         : [];
 
     if (!hasDef) {
-        score = Math.min(score, 45);
-        issues.push('Missing clear function definition.');
+        issues.push('Uses a non-standard function structure for this question format.');
     }
 
     if (!hasReturn) {
-        score = Math.min(score, 55);
-        issues.push('Missing explicit return statement.');
+        issues.push('May rely on side effects/printing instead of explicit return values.');
     }
 
     if (hasPlaceholder) {
-        score = Math.min(score, 25);
         issues.push('Contains placeholder/incomplete code (pass/TODO).');
     }
 
     if (isVeryShort) {
-        score = Math.min(score, 35);
-        issues.push('Code is too short to demonstrate a complete solution.');
+        issues.push('Very short implementation; check edge cases carefully.');
     }
 
     if (isTemplateOnly) {
-        score = Math.min(score, 20);
-        issues.push('Submission mostly matches scaffold/template without implementation depth.');
+        issues.push('Submission mostly matches scaffold/template.');
     }
 
     if (!isEasy && !hasControlFlow && code.length < 160) {
-        score = Math.min(score, 45);
-        issues.push('Insufficient algorithmic logic detected for this solution.');
+        issues.push('Limited visible algorithmic control flow for this difficulty.');
     }
 
     if (!isEasy && !hasDataOps && !hasComprehension) {
-        score = Math.min(score, 70);
-        issues.push('Limited concrete data-processing operations detected.');
+        issues.push('Limited visible data-processing operations for this difficulty.');
     }
 
-    if (issues.length >= 2) {
-        score = Math.min(score, 62);
+    if (score < 90 && issues.length < 2) {
+        issues.push('Add explicit handling for edge cases (empty input, single-item input, and repeated values) and verify expected outputs for each.');
     }
 
-    if (issues.length >= 4) {
-        score = Math.min(score, 50);
+    if (score < 90 && issues.length < 2) {
+        issues.push('Improve correctness confidence by testing additional cases and tightening logic around boundary conditions.');
+    }
+
+    if (score >= 90 && score < 100 && issues.length === 0) {
+        issues.push('For a higher score, refine readability and include clearer handling/comments for tricky edge-case branches.');
     }
 
     if (!Array.isArray(evaluationData?.strengths) || evaluationData.strengths.length === 0) {
@@ -295,7 +272,8 @@ export function normalizeEvaluationResult(evaluationData, userCode, codeTemplate
         score = Math.max(score, getCorrectnessScoreFloor(difficulty));
     }
 
-    const isCorrect = modelMarkedCorrect && !isTemplateOnly && hasDef && hasReturn && !hasPlaceholder;
+    // Enforce a minimum correctness threshold by score.
+    const isCorrect = modelMarkedCorrect || score >= 40;
 
     const finalFeedback = buildDetailedFeedback({
         feedback: evaluationData?.feedback,

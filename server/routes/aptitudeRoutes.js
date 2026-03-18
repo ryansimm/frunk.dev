@@ -101,7 +101,7 @@ Evaluate the code and respond with ONLY valid JSON:
 {
   "isCorrect": true/false,
   "score": 0-100,
-  "feedback": "Detailed constructive feedback (4-7 sentences) referencing the submitted logic quality, likely failing edge cases, and one concrete next fix",
+    "feedback": "Detailed constructive feedback (4-7 sentences) referencing logic quality, output behavior, and at least one concrete next fix to increase score",
   "issues": ["Issue 1", "Issue 2"] or [],
   "strengths": ["Strength 1"] or []
 }
@@ -114,11 +114,16 @@ Strict grading rubric (very important):
 - 0: Empty or irrelevant submission.
 
 Rules:
+- Determine isCorrect ONLY from behavioral correctness against the required output/test cases.
+- If output is correct for the required behavior, set isCorrect=true even if code style/format is simple.
+- Do NOT set isCorrect=false just for code length, style, naming, or preferred structure.
 - If code only keeps scaffold placeholders like "# your code here" and "pass" without real added logic, score must be <= 25 and isCorrect=false.
 - If placeholders are only inherited from the provided template and the user adds correct logic, do not penalize for those scaffold lines.
 - If required logic is missing or test cases would fail, isCorrect=false.
 - Do not award high scores for boilerplate structure alone.
 - Feedback must be specific and technical (avoid generic encouragement-only phrases).
+- If score is below 90, include at least 2 specific improvement items in "issues" describing exactly what to change for a better score.
+- If score is 90 or above, include at least 1 optional improvement item unless the solution is truly perfect.
 - Be strict and conservative with scoring.`;
 
             const { json: rawEvaluationData } = await generateJsonWithFallback(prompt, jsonModels);
