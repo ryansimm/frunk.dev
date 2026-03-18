@@ -1,11 +1,13 @@
-nav{
+nav.container-2{
     width : 100%;
-    /*background: rgb(60, 60, 60);*/ 
+    min-height: var(--navbar-height);
+    background: rgba(20, 20, 30, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     color : white;
-    padding : 4px 0;
-    position: fixed;
-    top : 0;
-    left: 0 ;
+    padding : 10px  40px;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -27,4 +29,19 @@ nav ul li{
     list-style: none;
     margin: 5px 20px;
     font-size: 16px;
+}
+
+nav ul {
+    padding: 4px 20px;
+}
+
+.nav-action {
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.token-display {
+    color: white;
+    font-weight: 600;
 }

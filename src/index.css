@@ -1,4 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+:root{
+    --navbar-height: 84px;
+}
 *{
     margin: 0;
     padding: 0;
@@ -7,6 +10,10 @@
 }
 body{
     background: #F5F5F5;
+}
+
+#root{
+    min-height: 100vh;
 }
 a{
     text-decoration: none;
@@ -23,6 +30,14 @@ a{
 .container-2{
     padding-left: 5%;
     padding-right: 5%;
+}
+
+.app-shell{
+    min-height: 100vh;
+}
+
+.app-content{
+    padding-top: 0;
 }
 .button{background: white;
     color: #212121;

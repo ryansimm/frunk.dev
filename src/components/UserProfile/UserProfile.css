@@ -25,6 +25,12 @@
   border-left: 5px solid #667eea;
 }
 
+.profile-email {
+  margin: 0 0 14px;
+  color: #495162;
+  font-weight: 600;
+}
+
 .profile-level {
   text-align: center;
   margin-bottom: 25px;

@@ -1,268 +1,737 @@
-import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import './AptitudeTest.css'
-import { aptitudeQuestions, calculatePoints } from '../../utils/aptitudeQuestions'
-import { saveAptitudeResults, getUserLevel } from '../../utils/levelSystem'
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import './AptitudeTest.css';
+import { getUserLevel } from '../../utils/levelSystem';
+import { apiService } from '../../services/api';
+import logo from '../../assets/logo.png';
+
+const TOTAL_QUESTIONS = 12;
+const SESSION_VERSION = 1;
+
+const getSessionStorageKey = (userId) => `aptitude_test_session_v${SESSION_VERSION}_${userId || 'anonymous'}`;
+
+const loadAptitudeSession = (userId) => {
+  try {
+    const raw = localStorage.getItem(getSessionStorageKey(userId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearAptitudeSession = (userId) => {
+  localStorage.removeItem(getSessionStorageKey(userId));
+};
 
 const AptitudeTest = ({ onTestComplete }) => {
-  const navigate = useNavigate()
-  const [testStarted, setTestStarted] = useState(false)
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [correctAnswers, setCorrectAnswers] = useState(0)
-  const [selectedAnswer, setSelectedAnswer] = useState(null)
-  const [answered, setAnswered] = useState(false)
-  const [timeRemaining, setTimeRemaining] = useState(300)
-  const [testComplete, setTestComplete] = useState(false)
-  const [userCode, setUserCode] = useState('')
-  const [feedbackMessage, setFeedbackMessage] = useState('')
+  const navigate = useNavigate();
+  const [user] = useState(() => {
+    const userData = localStorage.getItem('user');
+    return userData ? JSON.parse(userData) : null;
+  });
+  const [savedSession] = useState(() => loadAptitudeSession(user?.userId));
+  
+  // Test state
+  const [testStarted, setTestStarted] = useState(Boolean(savedSession?.testStarted));
+  const [testComplete, setTestComplete] = useState(Boolean(savedSession?.testComplete));
+  
+  // Question state
+  const [currentQuestionNumber, setCurrentQuestionNumber] = useState(Number(savedSession?.currentQuestionNumber || 1));
+  const [currentQuestion, setCurrentQuestion] = useState(savedSession?.currentQuestion || null);
+  const [currentDifficulty, setCurrentDifficulty] = useState(savedSession?.currentDifficulty || 'easy');
+  
+  // Answer state
+  const [userCode, setUserCode] = useState(savedSession?.userCode || '');
+  const [evaluation, setEvaluation] = useState(savedSession?.evaluation || null);
+  const [answered, setAnswered] = useState(Boolean(savedSession?.answered));
+  
+  // Progress tracking
+  const [questionHistory, setQuestionHistory] = useState(Array.isArray(savedSession?.questionHistory) ? savedSession.questionHistory : []);
+  const [correctAnswers, setCorrectAnswers] = useState(Number(savedSession?.correctAnswers || 0));
+  const [askedTopics, setAskedTopics] = useState(Array.isArray(savedSession?.askedTopics) ? savedSession.askedTopics : []);
 
-  // Timer effect
+  // Pending next-question advance (set after evaluation so user can read feedback first)
+  const [pendingNext, setPendingNext] = useState(savedSession?.pendingNext || null);
+
+  // Loading states
+  const [loadingQuestion, setLoadingQuestion] = useState(false);
+  const [evaluatingCode, setEvaluatingCode] = useState(false);
+
   useEffect(() => {
-    if (!testStarted || testComplete) return
-    const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          completeTest()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [testStarted, testComplete])
-
-  // Auto-fill template for free-code questions
-  useEffect(() => {
-    const question = getCurrentQuestion()
-    setUserCode(question?.type === 'free-code' ? question.codeTemplate : '')
-  }, [currentQuestionIndex])
-
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
-  const getCurrentQuestion = () => aptitudeQuestions[currentQuestionIndex]
-
-  const handleStartTest = () => {
-    setTestStarted(true)
-    setTimeRemaining(300)
-  }
-
-  const handleAnswerSelect = (answerIndex) => {
-    if (answered) return
-    setSelectedAnswer(answerIndex)
-    setAnswered(true)
-
-    const question = getCurrentQuestion()
-    const isCorrect = answerIndex === question.correctAnswer
-
-    if (isCorrect) {
-      setCorrectAnswers(prev => prev + 1)
-      setFeedbackMessage('Correct: ' + question.explanation)
-    } else {
-      setFeedbackMessage('Incorrect: ' + question.explanation)
+    if (!testStarted) {
+      return;
     }
-  }
 
-  const handleCodeSubmit = () => {
+    if (testComplete) {
+      clearAptitudeSession(user?.userId);
+      return;
+    }
+
+    const payload = {
+      testStarted,
+      testComplete,
+      currentQuestionNumber,
+      currentQuestion,
+      currentDifficulty,
+      userCode,
+      evaluation,
+      answered,
+      questionHistory,
+      correctAnswers,
+      askedTopics,
+      pendingNext,
+      updatedAt: new Date().toISOString()
+    };
+
+    localStorage.setItem(getSessionStorageKey(user?.userId), JSON.stringify(payload));
+  }, [
+    user?.userId,
+    testStarted,
+    testComplete,
+    currentQuestionNumber,
+    currentQuestion,
+    currentDifficulty,
+    userCode,
+    evaluation,
+    answered,
+    questionHistory,
+    correctAnswers,
+    askedTopics,
+    pendingNext
+  ]);
+
+  const updateStoredTokenBalance = (tokenBalance) => {
+    if (!Number.isFinite(tokenBalance)) {
+      return;
+    }
+
+    const userData = localStorage.getItem('user');
+    if (!userData) {
+      return;
+    }
+
+    const parsedUser = JSON.parse(userData);
+    const updatedUser = {
+      ...parsedUser,
+      tokenBalance
+    };
+
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+    window.dispatchEvent(new CustomEvent('tokenBalanceUpdated', { detail: { tokenBalance } }));
+  };
+
+  const handleStartTest = async () => {
+    clearAptitudeSession(user?.userId);
+    setTestStarted(true);
+    setTestComplete(false);
+    setCurrentQuestionNumber(1);
+    setCurrentQuestion(null);
+    setCurrentDifficulty('easy');
+    setUserCode('');
+    setEvaluation(null);
+    setAnswered(false);
+    setQuestionHistory([]);
+    setCorrectAnswers(0);
+    setAskedTopics([]);
+    setPendingNext(null);
+    await loadNextQuestion(1, null, 'easy', []);
+  };
+
+  const loadNextQuestion = async (questionNumber, lastCorrect, difficulty, topicsOverride) => {
+    setLoadingQuestion(true);
+    setEvaluation(null);
+    setAnswered(false);
+    const topicsToAvoid = topicsOverride !== undefined ? topicsOverride : askedTopics;
+    
+    try {
+      const data = await apiService.generateAdaptiveQuestion(
+        questionNumber,
+        lastCorrect,
+        difficulty,
+        user?.userId,
+        topicsToAvoid
+      );
+      
+      setCurrentQuestion(data);
+      setCurrentDifficulty(data.difficulty);
+      setUserCode(data.codeTemplate || '');
+      setCurrentQuestionNumber(questionNumber);
+      // Record this question so the next call can avoid its topic
+      setAskedTopics(prev => [...prev, (data.question || '').substring(0, 100)]);
+    } catch (error) {
+      console.error('Failed to load question:', error);
+      alert('Failed to load question. Please try again.');
+    }
+    
+    setLoadingQuestion(false);
+  };
+
+  const handleSubmitCode = async () => {
     if (!userCode.trim()) {
-      setFeedbackMessage('Please write some code before submitting.')
-      return
+      alert('Please write some code before submitting.');
+      return;
     }
 
-    const question = getCurrentQuestion()
-    let isCorrect = false
+    setEvaluation(null);
+    setEvaluatingCode(true);
+    
+    try {
+      const data = await apiService.evaluateAptitudeCode(
+        userCode,
+        currentQuestion.question,
+        currentDifficulty,
+        currentQuestion.testCases || [],
+        user?.userId,
+        currentQuestion.codeTemplate || ''
+      );
 
-    if (question.id === 11) {
-      const hasRequiredElements = 
-        userCode.includes('left') && 
-        userCode.includes('right') &&
-        userCode.includes('mid') &&
-        userCode.includes('while')
-      isCorrect = hasRequiredElements
+      setEvaluation(data);
+      setAnswered(true);
+
+      // Track result
+      const questionResult = {
+        questionNumber: currentQuestionNumber,
+        difficulty: currentDifficulty,
+        isCorrect: data.isCorrect,
+        score: data.score,
+        tokenAward: data.tokenAward || 0
+      };
+
+      const previousQuestionResult = questionHistory.find(
+        (entry) => entry.questionNumber === currentQuestionNumber
+      );
+
+      const nextQuestionHistory = previousQuestionResult
+        ? questionHistory.map((entry) => (
+          entry.questionNumber === currentQuestionNumber ? questionResult : entry
+        ))
+        : [...questionHistory, questionResult];
+
+      setQuestionHistory(nextQuestionHistory);
+
+      const wasPreviouslyCorrect = Boolean(previousQuestionResult?.isCorrect);
+      const isNowCorrect = Boolean(data.isCorrect);
+      const nextCorrectAnswers = isNowCorrect
+        ? (wasPreviouslyCorrect ? correctAnswers : correctAnswers + 1)
+        : (wasPreviouslyCorrect ? Math.max(0, correctAnswers - 1) : correctAnswers);
+
+      if (!wasPreviouslyCorrect && isNowCorrect) {
+        setCorrectAnswers(prev => prev + 1);
+      } else if (wasPreviouslyCorrect && !isNowCorrect) {
+        setCorrectAnswers(prev => Math.max(0, prev - 1));
+      }
+
+      if (Number.isFinite(data.tokenBalance)) {
+        updateStoredTokenBalance(data.tokenBalance);
+      }
+
+      // Store what to do next so the user can read feedback before advancing
+      setPendingNext({ nextQuestionHistory, nextCorrectAnswers, isCorrect: data.isCorrect });
+      
+    } catch (error) {
+      console.error('Failed to evaluate code:', error);
+      alert('Failed to evaluate code. Please try again.');
     }
+    
+    setEvaluatingCode(false);
+  };
 
-    setAnswered(true)
-    if (isCorrect) {
-      setCorrectAnswers(prev => prev + 1)
-      setFeedbackMessage('Correct: Good implementation. Includes key binary search elements.')
+  const handleRetryQuestion = () => {
+    setAnswered(false);
+    setEvaluation(null);
+    setPendingNext(null);
+    setUserCode(currentQuestion?.codeTemplate || '');
+  };
+
+  const handleNextQuestion = async () => {
+    if (!pendingNext) return;
+    const { nextQuestionHistory, nextCorrectAnswers, isCorrect } = pendingNext;
+    setPendingNext(null);
+    if (currentQuestionNumber >= TOTAL_QUESTIONS) {
+      await completeTest(nextQuestionHistory, nextCorrectAnswers);
     } else {
-      setFeedbackMessage('Your code is missing key components. Binary search needs: left pointer, right pointer, mid calculation, and while loop.')
+      await loadNextQuestion(
+        currentQuestionNumber + 1,
+        isCorrect,
+        currentDifficulty
+      );
     }
-  }
+  };
 
-  const handleTabKey = (event) => {
-    if (event.key === 'Tab') {
-      event.preventDefault()
-      const start = event.target.selectionStart
-      const end = event.target.selectionEnd
-      const newCode = userCode.substring(0, start) + '\t' + userCode.substring(end)
-      setUserCode(newCode)
-      setTimeout(() => {
-        event.target.selectionStart = event.target.selectionEnd = start + 1
-      }, 0)
+  const handleSkipQuestion = async () => {
+    if (evaluatingCode || answered) {
+      return;
     }
-  }
 
-  const handleNextQuestion = () => {
-    if (currentQuestionIndex < aptitudeQuestions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1)
-      setSelectedAnswer(null)
-      setAnswered(false)
-      setUserCode('')
-      setFeedbackMessage('')
-    } else {
-      completeTest()
+    const questionResult = {
+      questionNumber: currentQuestionNumber,
+      difficulty: currentDifficulty,
+      isCorrect: false,
+      score: 0,
+      skipped: true
+    };
+
+    const previousQuestionResult = questionHistory.find(
+      (entry) => entry.questionNumber === currentQuestionNumber
+    );
+
+    const updatedHistory = previousQuestionResult
+      ? questionHistory.map((entry) => (
+        entry.questionNumber === currentQuestionNumber ? questionResult : entry
+      ))
+      : [...questionHistory, questionResult];
+
+    if (previousQuestionResult?.isCorrect) {
+      setCorrectAnswers(prev => Math.max(0, prev - 1));
     }
-  }
 
-  const completeTest = () => {
-    setTestComplete(true)
-    const totalScore = Math.round((correctAnswers / aptitudeQuestions.length) * 100)
-    const level = getUserLevel(totalScore)
+    setQuestionHistory(updatedHistory);
+
+    if (currentQuestionNumber >= TOTAL_QUESTIONS) {
+      await completeTest(updatedHistory);
+      return;
+    }
+
+    await loadNextQuestion(
+      currentQuestionNumber + 1,
+      false,
+      currentDifficulty
+    );
+  };
+
+  const handleEndTestEarly = async () => {
+    if (evaluatingCode || loadingQuestion || currentQuestionNumber < 5) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'End the aptitude test now? Your score will be based on the questions completed so far.'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    await completeTest(questionHistory);
+  };
+
+  const completeTest = async (
+    finalQuestionHistory = questionHistory,
+    finalCorrectAnswers = correctAnswers
+  ) => {
+    setTestComplete(true);
+    
+    // Calculate final score
+    const totalScore = Math.round((finalCorrectAnswers / TOTAL_QUESTIONS) * 100);
+    const level = getUserLevel(totalScore);
     
     const results = {
       score: totalScore,
       level: level.label,
-      correctAnswers,
-      totalQuestions: aptitudeQuestions.length
-    }
-    
-    saveAptitudeResults(results)
-    if (onTestComplete) onTestComplete(results)
-  }
+      correctAnswers: finalCorrectAnswers,
+      totalQuestions: TOTAL_QUESTIONS,
+      questionHistory: finalQuestionHistory
+    };
 
+    onTestComplete?.(results);
+    
+    // Save to MongoDB
+    try {
+      const saveResponse = await apiService.saveAptitudeResults(user?.userId, results);
+
+      if (Number.isFinite(saveResponse?.tokenBalance)) {
+        updateStoredTokenBalance(saveResponse.tokenBalance);
+      }
+    } catch (error) {
+      console.error('Failed to save results:', error);
+    }
+  };
+
+  const handleTabKey = (event) => {
+    const INDENT = '    ';
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const start = event.target.selectionStart;
+      const end = event.target.selectionEnd;
+      const before = userCode.substring(0, start);
+      const after = userCode.substring(end);
+      const currentLineStart = before.lastIndexOf('\n') + 1;
+      const currentLine = before.substring(currentLineStart);
+      const leadingWhitespace = currentLine.match(/^\s*/)?.[0] || '';
+      const shouldIncreaseIndent = /:\s*$/.test(currentLine.trim());
+      const nextIndent = shouldIncreaseIndent ? `${leadingWhitespace}${INDENT}` : leadingWhitespace;
+      const insertText = `\n${nextIndent}`;
+      const newCode = `${before}${insertText}${after}`;
+
+      setUserCode(newCode);
+      setTimeout(() => {
+        const cursorPos = start + insertText.length;
+        event.target.selectionStart = cursorPos;
+        event.target.selectionEnd = cursorPos;
+      }, 0);
+      return;
+    }
+
+    if (event.key !== 'Tab') {
+      return;
+    }
+
+    event.preventDefault();
+    const start = event.target.selectionStart;
+    const end = event.target.selectionEnd;
+    const hasSelection = start !== end;
+
+    if (hasSelection) {
+      const selectionStartLine = userCode.lastIndexOf('\n', start - 1) + 1;
+      const selectionEndLineBreak = userCode.indexOf('\n', end);
+      const selectionEndLine = selectionEndLineBreak === -1 ? userCode.length : selectionEndLineBreak;
+      const selectedBlock = userCode.substring(selectionStartLine, selectionEndLine);
+      const selectedLines = selectedBlock.split('\n');
+
+      let adjustedLines;
+      if (event.shiftKey) {
+        adjustedLines = selectedLines.map((line) => {
+          if (line.startsWith(INDENT)) return line.slice(INDENT.length);
+          if (line.startsWith('  ')) return line.slice(2);
+          return line.replace(/^\s/, '');
+        });
+      } else {
+        adjustedLines = selectedLines.map((line) => `${INDENT}${line}`);
+      }
+
+      const replacement = adjustedLines.join('\n');
+      const newCode = `${userCode.substring(0, selectionStartLine)}${replacement}${userCode.substring(selectionEndLine)}`;
+      setUserCode(newCode);
+
+      setTimeout(() => {
+        const selectionDelta = replacement.length - selectedBlock.length;
+        event.target.selectionStart = selectionStartLine;
+        event.target.selectionEnd = end + selectionDelta;
+      }, 0);
+      return;
+    }
+
+    if (event.shiftKey) {
+      const lineStart = userCode.lastIndexOf('\n', start - 1) + 1;
+      const linePrefix = userCode.substring(lineStart, start);
+      let charsToRemove = 0;
+
+      if (linePrefix.endsWith(INDENT)) {
+        charsToRemove = INDENT.length;
+      } else {
+        const whitespaceMatch = linePrefix.match(/\s+$/);
+        if (whitespaceMatch) {
+          charsToRemove = Math.min(whitespaceMatch[0].length, INDENT.length);
+        }
+      }
+
+      if (charsToRemove > 0) {
+        const newCode = `${userCode.substring(0, start - charsToRemove)}${userCode.substring(end)}`;
+        setUserCode(newCode);
+        setTimeout(() => {
+          const cursorPos = start - charsToRemove;
+          event.target.selectionStart = cursorPos;
+          event.target.selectionEnd = cursorPos;
+        }, 0);
+      }
+      return;
+    }
+
+    const newCode = `${userCode.substring(0, start)}${INDENT}${userCode.substring(end)}`;
+    setUserCode(newCode);
+    setTimeout(() => {
+      const cursorPos = start + INDENT.length;
+      event.target.selectionStart = cursorPos;
+      event.target.selectionEnd = cursorPos;
+    }, 0);
+  };
+
+  // Test intro screen
   if (!testStarted) {
     return (
       <div className="aptitude-test-container">
         <div className="test-intro">
-          <h1>Python Aptitude Test</h1>
-          <p>This test will assess your Python skills and personalize your learning experience.</p>
+          <h1>Python Coding Aptitude Test</h1>
+          <p>AI-powered adaptive assessment to determine your skill level</p>
+          
           <div className="test-info">
             <div className="info-item">
-              <h3>Format</h3>
-              <p>Multiple choice, code completion, debugging, and free-coding questions</p>
+              <h3>AI-Generated</h3>
+              <p>Each question is uniquely created for you by AI</p>
             </div>
             <div className="info-item">
-              <h3>Duration</h3>
-              <p>Maximum 5 minutes</p>
+              <h3>Adaptive Difficulty</h3>
+              <p>Questions adjust based on your performance</p>
             </div>
             <div className="info-item">
-              <h3>Questions</h3>
-              <p>{aptitudeQuestions.length} questions with progressive difficulty</p>
+              <h3>Free Coding</h3>
+              <p>{TOTAL_QUESTIONS} hands-on coding exercises</p>
             </div>
             <div className="info-item">
-              <h3>Purpose</h3>
-              <p>To match you with appropriate coding challenges</p>
+              <h3>⏱Flexible Timing</h3>
+              <p>No time limit - please take your time to think</p>
             </div>
           </div>
+
+          <div className="how-it-works">
+            <h3>How It Works:</h3>
+            <ol>
+              <li>Complete {TOTAL_QUESTIONS} coding questions</li>
+              <li>Write actual Python code for each challenge</li>
+              <li>Get instant AI feedback on your solutions</li>
+              <li>Questions adapt - they will get harder if you're doing well, or easier if you're struggling</li>
+              <li>Receive your skill level at the end</li>
+            </ol>
+          </div>
+          
           <button className="button-start-test" onClick={handleStartTest}>
-            Start Test
+            Start Aptitude Test
           </button>
         </div>
       </div>
-    )
+    );
   }
 
+  // Test complete screen
   if (testComplete) {
-    const totalScore = Math.round((correctAnswers / aptitudeQuestions.length) * 100)
-    const level = getUserLevel(totalScore)
+    const totalScore = Math.round((correctAnswers / TOTAL_QUESTIONS) * 100);
+    const level = getUserLevel(totalScore);
     
     return (
       <div className="aptitude-test-container">
         <div className="test-results">
-          <h1>Test Complete</h1>
-          <div className="results-card" style={{ borderColor: level.color }}>
+          <h1>Test Complete!</h1>
+          <div className="results-card">
             <p className="score-text">Score: {totalScore}%</p>
             <h2>{level.label}</h2>
-            <p>{correctAnswers} out of {aptitudeQuestions.length} correct</p>
-            <p>Your personalized coding tasks will be tailored to match your {level.label.toLowerCase()} level.</p>
-            <button onClick={() => navigate('/')} className="continue-button">
-              Continue to Home
+            <p>{correctAnswers} out of {TOTAL_QUESTIONS} questions correct</p>
+            
+            <div className="difficulty-breakdown">
+              <h3>Performance Breakdown:</h3>
+              <div className="breakdown-stats">
+                <div className="stat">
+                  <span className="difficulty-badge difficulty-easy">Easy</span>
+                  <span>{questionHistory.filter(q => q.difficulty === 'easy').length} questions</span>
+                </div>
+                <div className="stat">
+                  <span className="difficulty-badge difficulty-medium">Medium</span>
+                  <span>{questionHistory.filter(q => q.difficulty === 'medium').length} questions</span>
+                </div>
+                <div className="stat">
+                  <span className="difficulty-badge difficulty-hard">Hard</span>
+                  <span>{questionHistory.filter(q => q.difficulty === 'hard').length} questions</span>
+                </div>
+              </div>
+            </div>
+
+            <p className="level-description">
+              Your personalized coding challenges will be tailored to your {level.label.toLowerCase()} level.
+            </p>
+            
+            <button
+              onClick={() => {
+                clearAptitudeSession(user?.userId);
+                navigate('/challenges');
+              }}
+              className="continue-button"
+            >
+              Continue to Challenges
             </button>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
-  const question = getCurrentQuestion()
-  const progress = ((currentQuestionIndex + 1) / aptitudeQuestions.length) * 100
+  // Loading question screen
+  if (loadingQuestion) {
+    return (
+      <div className="aptitude-test-container">
+        <div className="loading-container">
+          <h2>Generating Question {currentQuestionNumber} of {TOTAL_QUESTIONS}...</h2>
+          <div className="spinner"></div>
+          <p>The AI is creating a personalized coding challenge for you</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Main question screen
+  const progress = (currentQuestionNumber / TOTAL_QUESTIONS) * 100;
 
   return (
     <div className="aptitude-test-container">
       <div className="test-header">
-        <div className="test-progress">
-          <p>Question {currentQuestionIndex + 1} of {aptitudeQuestions.length}</p>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }}></div>
+        <div className="test-header-left">
+          <button
+            type="button"
+            className="home-logo-button"
+            onClick={() => navigate('/')}
+            aria-label="Return to home"
+            title="Return to home"
+          >
+            <img src={logo} alt="Home" className="home-logo-image" />
+          </button>
+
+          <div className="test-progress">
+            <div className="progress-bar">
+              <div className="progress-fill" style={{ width: `${progress}%` }}></div>
+            </div>
           </div>
         </div>
-        <span className={`test-timer ${timeRemaining < 60 ? 'time-warning' : ''}`}>
-          Time {formatTime(timeRemaining)}
-        </span>
+        <div className="score-display">
+          Correct: {correctAnswers}/{currentQuestionNumber - (answered ? 0 : 1)}
+        </div>
+      </div>
+
+      <div className="end-test-wrapper">
+        {currentQuestionNumber < 5 && (
+          <p className="end-test-note">End Test Early becomes available after Question 5.</p>
+        )}
+
+        {currentQuestionNumber >= 5 && (
+          <button
+            className="end-test-button"
+            onClick={handleEndTestEarly}
+            disabled={evaluatingCode || loadingQuestion}
+          >
+            End Test Early
+          </button>
+        )}
       </div>
 
       <div className="question-container">
-        <span className={`difficulty-badge difficulty-${question.difficulty}`}>
-          {question.difficulty.toUpperCase()}
-        </span>
+        <div className="question-header">
+          <span className="difficulty-badge">
+            Q{currentQuestionNumber}/{TOTAL_QUESTIONS}
+          </span>
+          <span className={`difficulty-badge difficulty-${currentDifficulty}`}>
+            {currentDifficulty.toUpperCase()}
+          </span>
+        </div>
 
-        <h2 className="question-text">{question.question}</h2>
+        <h2 className="question-text">{currentQuestion?.question}</h2>
 
-        {question.type === 'free-code' ? (
-          <div className="code-answer">
+        {currentQuestion?.hints && (
+          <details className="hints">
+            <summary>Hints (click to reveal)</summary>
+            <ul>
+              {currentQuestion.hints.map((hint, i) => (
+                <li key={i}>{hint}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+
+        <div className="test-content-grid">
+          <div className="code-editor-section">
+            <label>Your Solution:</label>
             <textarea
               onKeyDown={handleTabKey}
               value={userCode}
               onChange={(e) => setUserCode(e.target.value)}
-              disabled={answered}
+              disabled={answered || evaluatingCode}
               className="code-editor"
+              placeholder="Write your Python code here..."
+              rows={15}
             />
-            <button 
-              className="submit-button" 
-              onClick={handleCodeSubmit}
-              disabled={answered}
-            >
-              Submit Code
-            </button>
-          </div>
-        ) : (
-          <div className="options">
-            {question.options.map((option, index) => (
-              <button
-                key={index}
-                className={`option ${selectedAnswer === index ? 'selected' : ''} ${
-                  answered && index === question.correctAnswer ? 'correct' : ''
-                } ${answered && selectedAnswer === index && selectedAnswer !== question.correctAnswer ? 'incorrect' : ''}`}
-                onClick={() => handleAnswerSelect(index)}
-                disabled={answered}
-              >
-                <span>{String.fromCharCode(65 + index)}. {option}</span>
-              </button>
-            ))}
-          </div>
-        )}
 
-        {feedbackMessage && (
-          <div className={`feedback ${feedbackMessage.startsWith('✓') ? 'correct' : 'incorrect'}`}>
-            {feedbackMessage}
+            {!answered && (
+              <div className="action-buttons">
+                <button 
+                  className="submit-button" 
+                  onClick={handleSubmitCode}
+                  disabled={evaluatingCode}
+                >
+                  {evaluatingCode ? 'AI is Evaluating...' : 'Submit Solution'}
+                </button>
+                <button
+                  className="skip-button"
+                  onClick={handleSkipQuestion}
+                  disabled={evaluatingCode || loadingQuestion}
+                >
+                  Skip Question
+                </button>
+              </div>
+            )}
           </div>
-        )}
 
-        {answered && (
-          <button 
-            className="next-button" 
-            onClick={handleNextQuestion}
-          >
-            {currentQuestionIndex === aptitudeQuestions.length - 1 ? 'Complete Test' : 'Next Question'}
-          </button>
-        )}
+          <div className="feedback-panel">
+            <h3>Feedback</h3>
+
+            {evaluatingCode && (
+              <div className="evaluation-pending">
+                <h4>Evaluating your solution...</h4>
+                <p>Checking correctness, edge cases, and code quality now.</p>
+              </div>
+            )}
+
+            {!evaluatingCode && !evaluation && (
+              <div className="feedback-empty">
+                <p>Submit your code to see detailed feedback here.</p>
+              </div>
+            )}
+
+            {evaluation && (
+              <div className={`evaluation-result ${evaluation.isCorrect ? 'correct' : 'incorrect'}`}>
+                <div className="result-header">
+                  <h3>
+                    {evaluation.isCorrect ? '✅ Correct!' : '❌ Incorrect'}
+                  </h3>
+                  <span className="score-badge">Score: {evaluation.score}/100</span>
+                </div>
+                
+                <div className="feedback">
+                  <h4>Feedback:</h4>
+                  <p>{evaluation.feedback}</p>
+                </div>
+
+                {evaluation.strengths && evaluation.strengths.length > 0 && (
+                  <div className="strengths">
+                    <h4>Strengths:</h4>
+                    <ul>
+                      {evaluation.strengths.map((strength, i) => (
+                        <li key={i}>{strength}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {evaluation.issues && evaluation.issues.length > 0 && (
+                  <div className="issues">
+                    <h4>Areas to Improve:</h4>
+                    <ul>
+                      {evaluation.issues.map((issue, i) => (
+                        <li key={i}>{issue}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="action-buttons">
+                  <button
+                    className="retry-button"
+                    onClick={handleRetryQuestion}
+                    disabled={loadingQuestion}
+                  >
+                    Retry Question
+                  </button>
+                  <button
+                    className="next-button"
+                    onClick={handleNextQuestion}
+                    disabled={loadingQuestion}
+                  >
+                    {loadingQuestion ? 'Loading...' : (currentQuestionNumber === TOTAL_QUESTIONS ? 'See Results' : 'Next Question →')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default AptitudeTest
+export default AptitudeTest;
