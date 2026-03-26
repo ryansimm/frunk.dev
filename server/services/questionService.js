@@ -1,7 +1,7 @@
 export function getFallbackMcqQuestion(topic, difficulty) {
-    const normalizedDifficulty = (difficulty || 'medium').toLowerCase();
+    const normalisedDifficulty = (difficulty || 'medium').toLowerCase();
     return {
-        question: `Which statement best describes ${topic} in Python at a ${normalizedDifficulty} level?`,
+        question: `Which statement best describes ${topic} in Python at a ${normalisedDifficulty} level?`,
         options: [
             `${topic} is only used in web development`,
             `${topic} helps structure and solve problems in Python programs`,
@@ -15,8 +15,8 @@ export function getFallbackMcqQuestion(topic, difficulty) {
 }
 
 export function getFallbackKnowledgeQuestion(topic, difficulty) {
-    const normalizedDifficulty = (difficulty || 'medium').toLowerCase();
-    const normalizedTopic = (topic || '').toLowerCase();
+    const normalisedDifficulty = (difficulty || 'medium').toLowerCase();
+    const normalisedTopic = (topic || '').toLowerCase();
     
     // Topic-specific questions for better clarity
     const topicQuestions = {
@@ -24,7 +24,7 @@ export function getFallbackKnowledgeQuestion(topic, difficulty) {
             easy: [
                 { question: 'Describe the basic syntax and data types you would use to store and manipulate information in Python.', correctKeywords: ['variable', 'data type', 'string', 'integer', 'syntax', 'assign'] },
                 { question: 'What are the fundamental control structures in Python and when would you use each one?', correctKeywords: ['if', 'for', 'while', 'loop', 'condition', 'control'] },
-                { question: 'Explain what a function is and why it is useful in writing reusable code.', correctKeywords: ['reusable', 'organize', 'modular', 'parameter', 'return', 'call'] }
+                { question: 'Explain what a function is and why it is useful in writing reusable code.', correctKeywords: ['reusable', 'organise', 'modular', 'parameter', 'return', 'call'] }
             ],
             medium: [
                 { question: 'Compare procedural programming (step-by-step) with functional programming concepts in Python.', correctKeywords: ['procedure', 'function', 'side-effect', 'pure', 'parameters', 'return'] },
@@ -32,16 +32,16 @@ export function getFallbackKnowledgeQuestion(topic, difficulty) {
                 { question: 'Describe how error handling with try/except helps make Python programs more robust.', correctKeywords: ['exception', 'error', 'try', 'except', 'robust', 'graceful'] }
             ],
             hard: [
-                { question: 'Analyze how Python\'s object-oriented features (classes, inheritance, polymorphism) improve code organization.', correctKeywords: ['OOP', 'class', 'inheritance', 'polymorphism', 'encapsulation', 'abstraction'] },
+                { question: 'Analyse how Python\'s object-oriented features (classes, inheritance, polymorphism) improve code organisation.', correctKeywords: ['OOP', 'class', 'inheritance', 'polymorphism', 'encapsulation', 'abstraction'] },
                 { question: 'Explain the differences between shallow and deep copying in Python and when each matters.', correctKeywords: ['shallow', 'deep', 'reference', 'independent', 'mutable', 'copy'] },
-                { question: 'Design a strategy for optimizing Python code performance and explain trade-offs between readability and speed.', correctKeywords: ['optimize', 'performance', 'algorithm', 'readability', 'trade-off', 'efficiency'] }
+                { question: 'Design a strategy for optimising Python code performance and explain trade-offs between readability and speed.', correctKeywords: ['optimise', 'performance', 'algorithm', 'readability', 'trade-off', 'efficiency'] }
             ]
         },
         'functions': {
             easy: [
                 { question: 'Explain what a function is and describe its main components (parameters, body, return).', correctKeywords: ['definition', 'parameter', 'body', 'return', 'argument', 'call'] },
                 { question: 'How do function parameters and return values work together to make functions reusable?', correctKeywords: ['parameter', 'argument', 'return', 'reusable', 'input', 'output'] },
-                { question: 'Why is it better to use functions instead of writing the same code multiple times?', correctKeywords: ['reuse', 'DRY', 'maintainability', 'duplication', 'organize', 'modular'] }
+                { question: 'Why is it better to use functions instead of writing the same code multiple times?', correctKeywords: ['reuse', 'DRY', 'maintainability', 'duplication', 'organise', 'modular'] }
             ],
             medium: [
                 { question: 'Compare different ways to pass data to functions: positional args, keyword args, *args, **kwargs. When would you use each?', correctKeywords: ['positional', 'keyword', 'args', 'kwargs', 'flexibility', 'clarity'] },
@@ -49,16 +49,16 @@ export function getFallbackKnowledgeQuestion(topic, difficulty) {
                 { question: 'Describe lambda functions and compare them to regular functions.', correctKeywords: ['lambda', 'anonymous', 'concise', 'single expression', 'map', 'filter'] }
             ],
             hard: [
-                { question: 'Analyze how function decorators work and design a use case where decorators improve code organization.', correctKeywords: ['decorator', 'wrapper', 'higher-order', 'modification', 'reusable', 'elegant'] },
+                { question: 'Analyse how function decorators work and design a use case where decorators improve code organisation.', correctKeywords: ['decorator', 'wrapper', 'higher-order', 'modification', 'reusable', 'elegant'] },
                 { question: 'Explain closures and their role in functional programming patterns in Python.', correctKeywords: ['closure', 'nested', 'enclosure', 'state', 'functional', 'first-class'] },
-                { question: 'Design a recursive function and explain how to optimize it using techniques like memoization.', correctKeywords: ['recursive', 'base case', 'memoization', 'cache', 'optimization', 'call stack'] }
+                { question: 'Design a recursive function and explain how to optimise it using techniques like memoization.', correctKeywords: ['recursive', 'base case', 'memoization', 'cache', 'optimisation', 'call stack'] }
             ]
         },
         'lists': {
             easy: [
                 { question: 'What is a list and how does it differ from other Python data structures like tuples?', correctKeywords: ['ordered', 'mutable', 'collection', 'index', 'tuple', 'immutable'] },
                 { question: 'Describe common list operations like append, remove, and slicing.', correctKeywords: ['append', 'remove', 'insert', 'slice', 'method', 'operation'] },
-                { question: 'When would you use a list instead of a string or tuple?', correctKeywords: ['mutable', 'modifiable', 'collection', 'change', 'ordered', 'organize'] }
+                { question: 'When would you use a list instead of a string or tuple?', correctKeywords: ['mutable', 'modifiable', 'collection', 'change', 'ordered', 'organise'] }
             ],
             medium: [
                 { question: 'Explain list comprehensions and how they make code more concise and readable.', correctKeywords: ['comprehension', 'concise', 'readable', 'filter', 'transform', 'efficient'] },
@@ -66,7 +66,7 @@ export function getFallbackKnowledgeQuestion(topic, difficulty) {
                 { question: 'How do list methods like sort() and sorted() differ, and what are the performance implications?', correctKeywords: ['sort', 'sorted', 'in-place', 'return', 'performance', 'time complexity'] }
             ],
             hard: [
-                { question: 'Analyze the time and space complexity of various list operations (access, insert, delete, slice).', correctKeywords: ['time complexity', 'space complexity', 'O(n)', 'O(1)', 'insertion', 'deletion'] },
+                { question: 'Analyse the time and space complexity of various list operations (access, insert, delete, slice).', correctKeywords: ['time complexity', 'space complexity', 'O(n)', 'O(1)', 'insertion', 'deletion'] },
                 { question: 'Explain how list slicing works internally and design efficient strategies for large data manipulation.', correctKeywords: ['slicing', 'shallow copy', 'view', 'efficiency', 'memory', 'large data'] },
                 { question: 'Compare lists with other sequence types and explain when to use generators instead for memory efficiency.', correctKeywords: ['sequence', 'generator', 'lazy evaluation', 'memory', 'efficiency', 'yield'] }
             ]
@@ -83,9 +83,9 @@ export function getFallbackKnowledgeQuestion(topic, difficulty) {
                 { question: 'Describe dictionary comprehension and how it compares to list comprehension.', correctKeywords: ['comprehension', 'concise', 'key', 'value', 'filter', 'transform'] }
             ],
             hard: [
-                { question: 'Analyze the hashing mechanism in dictionaries and explain collision handling performance implications.', correctKeywords: ['hash', 'collision', 'algorithm', 'performance', 'load factor', 'O(1)'] },
+                { question: 'Analyse the hashing mechanism in dictionaries and explain collision handling performance implications.', correctKeywords: ['hash', 'collision', 'algorithm', 'performance', 'load factor', 'O(1)'] },
                 { question: 'Explain the difference between shallow and deep copying with dictionaries containing mutable values.', correctKeywords: ['shallow', 'deep', 'reference', 'independent', 'mutable', 'copy'] },
-                { question: 'Design efficient dictionary-based solutions for problems like grouping data or counting occurrences.', correctKeywords: ['counting', 'grouping', 'defaultdict', 'efficiency', 'algorithm', 'optimization'] }
+                { question: 'Design efficient dictionary-based solutions for problems like grouping data or counting occurrences.', correctKeywords: ['counting', 'grouping', 'defaultdict', 'efficiency', 'algorithm', 'optimisation'] }
             ]
         },
         'loops': {
@@ -100,7 +100,7 @@ export function getFallbackKnowledgeQuestion(topic, difficulty) {
                 { question: 'Describe else clauses in for and while loops and when they are useful.', correctKeywords: ['else', 'executed', 'no break', 'search', 'found', 'not found'] }
             ],
             hard: [
-                { question: 'Analyze loop performance and explain optimization techniques like reducing iterations and avoiding costly operations.', correctKeywords: ['optimization', 'performance', 'algorithm', 'complexity', 'O(n)', 'refactor'] },
+                { question: 'Analyse loop performance and explain optimisation techniques like reducing iterations and avoiding costly operations.', correctKeywords: ['optimisation', 'performance', 'algorithm', 'complexity', 'O(n)', 'refactor'] },
                 { question: 'Explain generator-based loops and lazy evaluation compared to traditional loops.', correctKeywords: ['generator', 'yield', 'lazy', 'memory efficient', 'iteration', 'performance'] },
                 { question: 'Design loop-based algorithms for problems like searching, sorting, and filtering efficiently.', correctKeywords: ['algorithm', 'search', 'sort', 'filter', 'efficiency', 'pattern'] }
             ]
@@ -108,16 +108,16 @@ export function getFallbackKnowledgeQuestion(topic, difficulty) {
         'oop': {
             easy: [
                 { question: 'What is a class and how does it relate to objects in Python?', correctKeywords: ['blueprint', 'template', 'instance', 'attribute', 'method', 'object'] },
-                { question: 'Explain what the __init__ method does and why it is important.', correctKeywords: ['constructor', 'initialize', 'attribute', 'instance', 'self', 'setup'] },
+                { question: 'Explain what the __init__ method does and why it is important.', correctKeywords: ['constructor', 'initialise', 'attribute', 'instance', 'self', 'setup'] },
                 { question: 'Describe the difference between class attributes and instance attributes.', correctKeywords: ['class attribute', 'instance attribute', 'shared', 'individual', 'self', 'class'] }
             ],
             medium: [
-                { question: 'Explain inheritance and how it promotes code reuse and organization.', correctKeywords: ['inheritance', 'parent', 'child', 'reuse', 'extend', 'hierarchy'] },
+                { question: 'Explain inheritance and how it promotes code reuse and organisation.', correctKeywords: ['inheritance', 'parent', 'child', 'reuse', 'extend', 'hierarchy'] },
                 { question: 'What is polymorphism and how does it allow different classes to be used interchangeably?', correctKeywords: ['polymorphism', 'override', 'method', 'interface', 'flexibility', 'duck typing'] },
                 { question: 'Describe encapsulation and how private attributes (e.g., _attribute) improve class design.', correctKeywords: ['encapsulation', 'private', 'public', 'abstraction', 'hide', 'implementation'] }
             ],
             hard: [
-                { question: 'Analyze how multiple inheritance works in Python and discuss potential issues like the diamond problem.', correctKeywords: ['multiple inheritance', 'diamond', 'MRO', 'method resolution', 'order'] },
+                { question: 'Analyse how multiple inheritance works in Python and discuss potential issues like the diamond problem.', correctKeywords: ['multiple inheritance', 'diamond', 'MRO', 'method resolution', 'order'] },
                 { question: 'Explain mixins and how they provide a better alternative to multiple inheritance for composing behavior.', correctKeywords: ['mixin', 'composition', 'behavior', 'flexible', 'reusable', 'multiple'] },
                 { question: 'Design a robust OOP architecture with proper use of inheritance, composition, and design patterns.', correctKeywords: ['architecture', 'design pattern', 'composition', 'inheritance', 'abstract', 'interface'] }
             ]
@@ -125,9 +125,9 @@ export function getFallbackKnowledgeQuestion(topic, difficulty) {
     };
 
     // Get topic-specific questions or fall back to generic
-    const topicKey = Object.keys(topicQuestions).find(key => normalizedTopic.includes(key)) || 'python basics';
+    const topicKey = Object.keys(topicQuestions).find(key => normalisedTopic.includes(key)) || 'python basics';
     
-    const level = normalizedDifficulty;
+    const level = normalisedDifficulty;
     const pool = topicQuestions[topicKey]?.[level] || topicQuestions[topicKey]?.['medium'] || topicQuestions['python basics'].medium;
     
     const selected = pool[Math.floor(Math.random() * pool.length)];

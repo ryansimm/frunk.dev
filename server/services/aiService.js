@@ -38,21 +38,25 @@ function extractJsonFromModelResponse(rawText) {
 
 export async function generateJsonWithFallback(prompt, modelNames = JSON_RESPONSE_MODELS) {
     let lastError;
+    console.log(`🤖 Trying ${modelNames.length} models for JSON generation:`, modelNames);
 
     for (const modelName of modelNames) {
         try {
+            console.log(`  ↳ Attempting: ${modelName}...`);
             const genAI = getGenAIClient();
             const model = genAI.getGenerativeModel({ model: modelName });
             const result = await model.generateContent(prompt);
             const text = result.response.text();
             const json = extractJsonFromModelResponse(text);
+            console.log(`  ✅ Success with ${modelName}`);
             return { json, modelName };
         } catch (error) {
             lastError = error;
-            console.warn(`Model failed (${modelName}):`, error.message);
+            console.warn(`  ❌ ${modelName} failed:`, error.message);
         }
     }
 
+    console.error('🚨 All models failed. Last error:', lastError?.message);
     throw lastError || new Error('No AI model available');
 }
 

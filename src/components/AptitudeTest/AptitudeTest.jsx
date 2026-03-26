@@ -101,7 +101,12 @@ const AptitudeTest = ({ onTestComplete }) => {
   ]);
 
   const updateStoredTokenBalance = (tokenBalance) => {
-    if (!Number.isFinite(tokenBalance)) {
+    if (tokenBalance === null || tokenBalance === undefined || tokenBalance === '') {
+      return;
+    }
+
+    const normalisedTokenBalance = Number(tokenBalance);
+    if (!Number.isFinite(normalisedTokenBalance)) {
       return;
     }
 
@@ -113,11 +118,11 @@ const AptitudeTest = ({ onTestComplete }) => {
     const parsedUser = JSON.parse(userData);
     const updatedUser = {
       ...parsedUser,
-      tokenBalance
+      tokenBalance: normalisedTokenBalance
     };
 
     localStorage.setItem('user', JSON.stringify(updatedUser));
-    window.dispatchEvent(new CustomEvent('tokenBalanceUpdated', { detail: { tokenBalance } }));
+    window.dispatchEvent(new CustomEvent('tokenBalanceUpdated', { detail: { tokenBalance: normalisedTokenBalance } }));
   };
 
   const handleStartTest = async () => {
@@ -221,8 +226,12 @@ const AptitudeTest = ({ onTestComplete }) => {
         setCorrectAnswers(prev => Math.max(0, prev - 1));
       }
 
-      if (Number.isFinite(data.tokenBalance)) {
-        updateStoredTokenBalance(data.tokenBalance);
+      const latestBalanceRaw = data?.tokenBalance;
+      if (latestBalanceRaw !== null && latestBalanceRaw !== undefined && latestBalanceRaw !== '') {
+        const latestBalance = Number(latestBalanceRaw);
+        if (Number.isFinite(latestBalance)) {
+          updateStoredTokenBalance(latestBalance);
+        }
       }
 
       // Store what to do next so the user can read feedback before advancing
@@ -339,8 +348,12 @@ const AptitudeTest = ({ onTestComplete }) => {
     try {
       const saveResponse = await apiService.saveAptitudeResults(user?.userId, results);
 
-      if (Number.isFinite(saveResponse?.tokenBalance)) {
-        updateStoredTokenBalance(saveResponse.tokenBalance);
+      const latestBalanceRaw = saveResponse?.tokenBalance;
+      if (latestBalanceRaw !== null && latestBalanceRaw !== undefined && latestBalanceRaw !== '') {
+        const latestBalance = Number(latestBalanceRaw);
+        if (Number.isFinite(latestBalance)) {
+          updateStoredTokenBalance(latestBalance);
+        }
       }
     } catch (error) {
       console.error('Failed to save results:', error);
@@ -526,7 +539,7 @@ const AptitudeTest = ({ onTestComplete }) => {
             </div>
 
             <p className="level-description">
-              Your personalized coding challenges will be tailored to your {level.label.toLowerCase()} level.
+              Your personalised coding challenges will be tailored to your {level.label.toLowerCase()} level.
             </p>
             
             <button
@@ -551,7 +564,7 @@ const AptitudeTest = ({ onTestComplete }) => {
         <div className="loading-container">
           <h2>Generating Question {currentQuestionNumber} of {TOTAL_QUESTIONS}...</h2>
           <div className="spinner"></div>
-          <p>The AI is creating a personalized coding challenge for you</p>
+          <p>The AI is creating a personalised coding challenge for you</p>
         </div>
       </div>
     );
@@ -614,14 +627,21 @@ const AptitudeTest = ({ onTestComplete }) => {
         <h2 className="question-text">{currentQuestion?.question}</h2>
 
         {currentQuestion?.hints && (
-          <details className="hints">
-            <summary>Hints (click to reveal)</summary>
-            <ul>
-              {currentQuestion.hints.map((hint, i) => (
-                <li key={i}>{hint}</li>
-              ))}
-            </ul>
-          </details>
+          <div className="question-hints">
+            <strong>Hints:</strong> {currentQuestion.hints.join(' | ')}
+          </div>
+        )}
+
+        {currentQuestion?.testCases && currentQuestion.testCases.length > 0 && (
+          <div className="question-test-cases">
+            <strong>Test Cases:</strong>
+            {currentQuestion.testCases.map((testCase, idx) => (
+              <div key={idx} className="test-case">
+                <span>Input: {testCase.input}</span>
+                <span>Expected: {testCase.expected}</span>
+              </div>
+            ))}
+          </div>
         )}
 
         <div className="test-content-grid">
@@ -682,10 +702,12 @@ const AptitudeTest = ({ onTestComplete }) => {
                   <span className="score-badge">Score: {evaluation.score}/100</span>
                 </div>
                 
-                <div className="feedback">
-                  <h4>Feedback:</h4>
-                  <p>{evaluation.feedback}</p>
-                </div>
+                {evaluation.feedback && (
+                  <div className="feedback">
+                    <h4>Feedback:</h4>
+                    <p>{evaluation.feedback}</p>
+                  </div>
+                )}
 
                 {evaluation.strengths && evaluation.strengths.length > 0 && (
                   <div className="strengths">

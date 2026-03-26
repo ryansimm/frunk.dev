@@ -7,7 +7,7 @@ const getAuthToken = () => localStorage.getItem('authToken') || '';
 
 const authHeaders = () => {
     const token = getAuthToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    return token ? { Authorisation: `Bearer ${token}` } : {};
 };
 
 //registering a new user or logging in an existing user

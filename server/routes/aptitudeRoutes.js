@@ -6,7 +6,7 @@ export function createAptitudeRoutes({
     jsonModels,
     getFallbackAdaptiveQuestion,
     resolveNextDifficulty,
-    normalizeEvaluationResult,
+    normaliseEvaluationResult,
     calculateTokenAward,
     getFallbackEvaluation,
     parseOptionalUserId,
@@ -14,6 +14,60 @@ export function createAptitudeRoutes({
     toObjectId
 }) {
     const router = express.Router();
+
+    const stripMarkdown = (text = '') => String(text)
+        .replace(/`+/g, '')
+        .replace(/\*\*/g, '')
+        .replace(/\*/g, '')
+        .replace(/#+\s?/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const limitWords = (text = '', maxWords = 12) => {
+        const words = stripMarkdown(text).split(' ').filter(Boolean);
+        return words.slice(0, maxWords).join(' ');
+    };
+
+    const limitChars = (text = '', maxChars = 180) => {
+        const cleaned = stripMarkdown(text);
+        if (cleaned.length <= maxChars) {
+            return cleaned;
+        }
+
+        return `${cleaned.slice(0, Math.max(0, maxChars - 3)).trim()}...`;
+    };
+
+    const normaliseAdaptiveQuestion = (generatedData = {}, difficulty = 'medium') => {
+        const testCases = Array.isArray(generatedData.testCases)
+            ? generatedData.testCases.slice(0, 2).map((testCase) => ({
+                input: String(testCase?.input ?? '').slice(0, 80),
+                expected: String(testCase?.expected ?? '').slice(0, 80)
+            }))
+            : [
+                { input: 'example', expected: 'result' },
+                { input: 'edge_case', expected: 'result' }
+            ];
+
+        const firstTest = testCases[0] || { input: 'example', expected: 'result' };
+        const baseQuestion = limitChars(generatedData.question || 'Write a Python function to solve this problem.', 170);
+        const questionWithExample = baseQuestion.includes('Example:')
+            ? baseQuestion
+            : limitChars(`${baseQuestion} Example: ${firstTest.input} -> ${firstTest.expected}`, 180);
+
+        const hints = Array.isArray(generatedData.hints) ? generatedData.hints : [];
+
+        return {
+            ...generatedData,
+            difficulty,
+            question: questionWithExample,
+            codeTemplate: generatedData.codeTemplate || 'def solution():\n    # Your code here\n    pass',
+            hints: [
+                limitWords(hints[0] || 'Break the task into clear steps.', 12),
+                limitWords(hints[1] || 'Check edge cases before returning.', 12)
+            ],
+            testCases
+        };
+    };
 
     router.post('/generate-adaptive-question', async (req, res) => {
         const { questionNumber, lastAnswerCorrect, currentDifficulty, userId, askedTopics = [] } = req.body;
@@ -35,6 +89,11 @@ Difficulty guidelines:
 
 This is question #${questionNumber} of 12. Each question must cover a DIFFERENT Python concept or problem type. Vary the problem style — use different data structures, algorithms, and problem domains each time.${avoidClause}
 
+Keep output concise:
+- "question": max 180 characters and include one short example.
+- "hints": exactly 2 hints, each <= 12 words.
+- "testCases": exactly 2 concise test cases.
+
 Return ONLY valid JSON in this exact format:
 {
   "question": "Clear problem description with example input/output",
@@ -50,7 +109,7 @@ Return ONLY valid JSON in this exact format:
             const responseTime = Date.now() - startTime;
 
             // Always use server-computed difficulty — never trust the AI-returned value
-            const safeQuestion = { ...questionData, difficulty: nextDifficulty };
+            const safeQuestion = normaliseAdaptiveQuestion(questionData, nextDifficulty);
 
             const dbEntry = {
                 userId: userId || 'anonymous',
@@ -118,7 +177,7 @@ Rules:
 - If output is correct for the required behavior, set isCorrect=true even if code style/format is simple.
 - Do NOT set isCorrect=false just for code length, style, naming, or preferred structure.
 - If code only keeps scaffold placeholders like "# your code here" and "pass" without real added logic, score must be <= 25 and isCorrect=false.
-- If placeholders are only inherited from the provided template and the user adds correct logic, do not penalize for those scaffold lines.
+- If placeholders are only inherited from the provided template and the user adds correct logic, do not penalise for those scaffold lines.
 - If required logic is missing or test cases would fail, isCorrect=false.
 - Do not award high scores for boilerplate structure alone.
 - Feedback must be specific and technical (avoid generic encouragement-only phrases).
@@ -127,7 +186,7 @@ Rules:
 - Be strict and conservative with scoring.`;
 
             const { json: rawEvaluationData } = await generateJsonWithFallback(prompt, jsonModels);
-            const evaluationData = normalizeEvaluationResult(rawEvaluationData, userCode, codeTemplate, difficulty);
+            const evaluationData = normaliseEvaluationResult(rawEvaluationData, userCode, codeTemplate, difficulty);
             const { tokenAward, tokenBreakdown } = calculateTokenAward({
                 evaluationData,
                 difficulty,
@@ -150,7 +209,7 @@ Rules:
                     { returnDocument: 'after' }
                 );
 
-                tokenBalance = userUpdate?.value?.tokenBalance ?? null;
+                tokenBalance = userUpdate?.value?.tokenBalance ?? userUpdate?.tokenBalance ?? null;
             }
 
             await db.collection('aptitude_submissions').insertOne({
@@ -195,7 +254,7 @@ Rules:
                     { returnDocument: 'after' }
                 );
 
-                tokenBalance = userUpdate?.value?.tokenBalance ?? null;
+                tokenBalance = userUpdate?.value?.tokenBalance ?? userUpdate?.tokenBalance ?? null;
             }
 
             res.json({
@@ -242,7 +301,7 @@ Rules:
                     { returnDocument: 'after' }
                 );
 
-                tokenBalance = userUpdate?.value?.tokenBalance ?? null;
+                tokenBalance = userUpdate?.value?.tokenBalance ?? userUpdate?.tokenBalance ?? null;
             }
 
             res.json({

@@ -102,8 +102,23 @@ const AppContent = () => {
 
   useEffect(() => {
     const onTokenUpdate = (event) => {
-      const nextBalance = Number(event?.detail?.tokenBalance || 0)
+      const nextBalance = Number(event?.detail?.tokenBalance)
+      if (!Number.isFinite(nextBalance)) {
+        return
+      }
+
       setTokenBalance(nextBalance)
+
+      const userData = localStorage.getItem('user')
+      if (!userData) {
+        return
+      }
+
+      const parsedUser = JSON.parse(userData)
+      localStorage.setItem('user', JSON.stringify({
+        ...parsedUser,
+        tokenBalance: nextBalance
+      }))
     }
 
     window.addEventListener('tokenBalanceUpdated', onTokenUpdate)

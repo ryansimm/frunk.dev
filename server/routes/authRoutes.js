@@ -26,7 +26,7 @@ export function createAuthRoutes({ db }) {
         );
     }
 
-    function sanitizeUser(user) {
+    function sanitiseUser(user) {
         return {
             userId: user._id.toString(),
             email: user.email,
@@ -78,7 +78,7 @@ export function createAuthRoutes({ db }) {
     }
 
     async function authenticateRequest(req, res, next) {
-        const header = req.headers.authorization || '';
+        const header = req.headers.authorisation || '';
         const token = header.startsWith('Bearer ') ? header.slice(7) : null;
 
         if (!token) {
@@ -135,7 +135,7 @@ export function createAuthRoutes({ db }) {
             res.json({
                 success: true,
                 userId: result.insertedId.toString(),
-                user: sanitizeUser(insertedUser)
+                user: sanitiseUser(insertedUser)
             });
         } catch (error) {
             console.error('Registration error:', error);
@@ -190,7 +190,7 @@ export function createAuthRoutes({ db }) {
                 success: true,
                 userId: user._id.toString(),
                 token,
-                user: sanitizeUser(user)
+                user: sanitiseUser(user)
             });
         } catch (error) {
             console.error('Login error:', error);
@@ -240,7 +240,7 @@ export function createAuthRoutes({ db }) {
                 success: true,
                 userId: result.insertedId.toString(),
                 token,
-                user: sanitizeUser(insertedUser)
+                user: sanitiseUser(insertedUser)
             });
         } catch (error) {
             console.error('Signup error:', error);
@@ -261,10 +261,46 @@ export function createAuthRoutes({ db }) {
                 { sort: { createdAt: -1 } }
             );
 
+            const [aptitudeTotals = { attempted: 0, correct: 0 }] = await db.collection('aptitude_results')
+                .aggregate([
+                    { $match: { userId: user._id.toString() } },
+                    {
+                        $group: {
+                            _id: null,
+                            attempted: { $sum: { $ifNull: ['$totalQuestions', 0] } },
+                            correct: { $sum: { $ifNull: ['$correctAnswers', 0] } }
+                        }
+                    }
+                ])
+                .toArray();
+
+            const [challengeTotals = { attempted: 0, correct: 0 }] = await db.collection('challenge_token_awards')
+                .aggregate([
+                    { $match: { userId: user._id.toString() } },
+                    {
+                        $group: {
+                            _id: null,
+                            attempted: { $sum: 1 },
+                            correct: {
+                                $sum: {
+                                    $cond: [{ $eq: ['$isCorrect', true] }, 1, 0]
+                                }
+                            }
+                        }
+                    }
+                ])
+                .toArray();
+
+            const progressStats = {
+                attempted: Number(aptitudeTotals.attempted || 0) + Number(challengeTotals.attempted || 0),
+                correct: Number(aptitudeTotals.correct || 0) + Number(challengeTotals.correct || 0)
+            };
+
             res.json({
                 success: true,
-                user: sanitizeUser(user),
-                latestResult: latestResult || null
+                user: sanitiseUser(user),
+                latestResult: latestResult || null,
+                progressStats
             });
         } catch (error) {
             console.error('Failed to fetch profile:', error);

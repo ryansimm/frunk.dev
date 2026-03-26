@@ -15,7 +15,7 @@ export async function connectToDB() {
 
 export function getDb() {
     if (!db) {
-        throw new Error('Database connection has not been initialized.');
+        throw new Error('Database connection has not been initialised.');
     }
 
     return db;

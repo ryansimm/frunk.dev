@@ -1,4 +1,4 @@
-function normalizeCodeForTemplateComparison(code) {
+function normaliseCodeForTemplateComparison(code) {
     return (code || '')
         .replace(/#.*$/gm, '')
         .replace(/\s+/g, '')
@@ -11,14 +11,14 @@ function isSubmissionNearTemplate(userCode, codeTemplate) {
         return false;
     }
 
-    const normalizedUser = normalizeCodeForTemplateComparison(userCode);
-    const normalizedTemplate = normalizeCodeForTemplateComparison(codeTemplate);
+    const normalisedUser = normaliseCodeForTemplateComparison(userCode);
+    const normalisedTemplate = normaliseCodeForTemplateComparison(codeTemplate);
 
-    if (!normalizedUser || !normalizedTemplate) {
+    if (!normalisedUser || !normalisedTemplate) {
         return false;
     }
 
-    return normalizedUser === normalizedTemplate;
+    return normalisedUser === normalisedTemplate;
 }
 
 function stripTemplateScaffoldArtifacts(userCode, codeTemplate) {
@@ -38,12 +38,12 @@ function stripTemplateScaffoldArtifacts(userCode, codeTemplate) {
     return (userCode || '')
         .split('\n')
         .filter((line) => {
-            const normalized = line.trim().toLowerCase();
-            if (!normalized) {
+            const normalised = line.trim().toLowerCase();
+            if (!normalised) {
                 return true;
             }
 
-            const isScaffoldLine = scaffoldTokens.has(normalized) && templateLineSet.has(normalized);
+            const isScaffoldLine = scaffoldTokens.has(normalised) && templateLineSet.has(normalised);
             return !isScaffoldLine;
         })
         .join('\n');
@@ -57,11 +57,11 @@ function getCorrectnessScoreFloor(difficulty) {
 }
 
 function buildDetailedFeedback({ feedback, score, difficulty, issues, strengths, isCorrect }) {
-    const normalizedFeedback = (feedback || '').trim();
+    const normalisedFeedback = (feedback || '').trim();
     const topStrengths = (strengths || []).slice(0, 3);
     const topIssues = (issues || []).slice(0, 3);
 
-    const summary = normalizedFeedback || (isCorrect
+    const summary = normalisedFeedback || (isCorrect
         ? 'Your output matches the expected behavior for this question.'
         : 'Your output does not fully match the expected behavior yet.');
 
@@ -199,7 +199,7 @@ export function getFallbackEvaluation(userCode, codeTemplate, difficulty) {
     };
 }
 
-export function normalizeEvaluationResult(evaluationData, userCode, codeTemplate, difficulty) {
+export function normaliseEvaluationResult(evaluationData, userCode, codeTemplate, difficulty) {
     const code = (userCode || '').trim();
     const nonTemplateCode = stripTemplateScaffoldArtifacts(code, codeTemplate).trim();
     const hasDef = /\bdef\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(/.test(code);
@@ -266,6 +266,14 @@ export function normalizeEvaluationResult(evaluationData, userCode, codeTemplate
         score = Math.min(score, 78);
     }
 
+    const feedbackText = String(evaluationData?.feedback || '').toLowerCase();
+    const feedbackSuggestsImprovements = /\b(improv|should|could|consider|missing|issue|fix|edge case|not handle)\b/.test(feedbackText);
+
+    // A perfect score must not include corrective guidance.
+    if (score === 100 && (issues.length > 0 || feedbackSuggestsImprovements)) {
+        score = 99;
+    }
+
     const modelMarkedCorrect = Boolean(evaluationData?.isCorrect);
 
     if (modelMarkedCorrect) {
@@ -275,14 +283,17 @@ export function normalizeEvaluationResult(evaluationData, userCode, codeTemplate
     // Enforce a minimum correctness threshold by score.
     const isCorrect = modelMarkedCorrect || score >= 40;
 
-    const finalFeedback = buildDetailedFeedback({
-        feedback: evaluationData?.feedback,
-        score,
-        difficulty,
-        issues,
-        strengths,
-        isCorrect
-    });
+    const isPerfectSubmission = score === 100 && issues.length === 0;
+    const finalFeedback = isPerfectSubmission
+        ? ''
+        : buildDetailedFeedback({
+            feedback: evaluationData?.feedback,
+            score,
+            difficulty,
+            issues,
+            strengths,
+            isCorrect
+        });
 
     return {
         isCorrect,

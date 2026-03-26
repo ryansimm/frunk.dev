@@ -6,9 +6,9 @@ import { apiService } from '../../services/api'
 const TOPICS = ['Python Basics', 'Functions', 'Lists', 'Dictionaries', 'Loops', 'OOP']
 
 const resolveDifficultyFromLevel = (level) => {
-  const normalized = (level || '').toLowerCase()
-  if (normalized.includes('professional') || normalized.includes('advanced')) return 'hard'
-  if (normalized.includes('intermediate')) return 'medium'
+  const normalised = (level || '').toLowerCase()
+  if (normalised.includes('professional') || normalised.includes('advanced')) return 'hard'
+  if (normalised.includes('intermediate')) return 'medium'
   return 'easy'
 }
 
@@ -23,7 +23,7 @@ const selectRandomQuestionType = (topic) => {
     if (rand < 0.67) return 'knowledge'
     return 'mcq'
   } else {
-    // 80% free-code, 20% other for specialized topics
+    // 80% free-code, 20% other for specialised topics
     const rand = Math.random()
     if (rand < 0.8) return 'freeCode'
     if (rand < 0.9) return 'knowledge'
@@ -55,7 +55,12 @@ const Challenges = () => {
   const getAptitudeSessionKey = (userId) => `aptitude_test_session_v1_${userId || 'anonymous'}`
 
   const updateStoredTokenBalance = (tokenBalance) => {
-    if (!Number.isFinite(tokenBalance)) {
+    if (tokenBalance === null || tokenBalance === undefined || tokenBalance === '') {
+      return
+    }
+
+    const normalisedTokenBalance = Number(tokenBalance)
+    if (!Number.isFinite(normalisedTokenBalance)) {
       return
     }
 
@@ -67,11 +72,32 @@ const Challenges = () => {
     const parsedUser = JSON.parse(storedUser)
     const updatedUser = {
       ...parsedUser,
-      tokenBalance
+      tokenBalance: normalisedTokenBalance
     }
 
     localStorage.setItem('user', JSON.stringify(updatedUser))
-    window.dispatchEvent(new CustomEvent('tokenBalanceUpdated', { detail: { tokenBalance } }))
+    window.dispatchEvent(new CustomEvent('tokenBalanceUpdated', { detail: { tokenBalance: normalisedTokenBalance } }))
+  }
+
+  const applyTokenAwardToStoredBalance = (tokenAward, tokenBalanceFromServer) => {
+    const serverBalance = Number(tokenBalanceFromServer)
+    if (Number.isFinite(serverBalance)) {
+      updateStoredTokenBalance(serverBalance)
+      return
+    }
+
+    const safeAward = Number(tokenAward)
+    if (!Number.isFinite(safeAward)) {
+      return
+    }
+
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}')
+    const currentBalance = Number(storedUser?.tokenBalance || 0)
+    if (!Number.isFinite(currentBalance)) {
+      return
+    }
+
+    updateStoredTokenBalance(currentBalance + safeAward)
   }
 
   useEffect(() => {
@@ -171,15 +197,6 @@ const Challenges = () => {
 
     try {
       let tokenAward = 0
-      console.log('Sending feedback request for MCQ...')
-      const response = await apiService.getLearningFeedback({
-        userAnswer: selectedAnswer,
-        correctAnswer: questionData.correctAnswer,
-        questionText: questionData.question,
-        userId: userData.userId,
-        questionType: 'mcq'
-      })
-
       const tokenResponse = await apiService.awardChallengeTokens({
         userId: userData.userId,
         questionType: 'mcq',
@@ -189,13 +206,25 @@ const Challenges = () => {
       })
       tokenAward = Number(tokenResponse?.tokenAward || 0)
       setLatestTokenAward(tokenAward)
-      if (Number.isFinite(tokenResponse?.tokenBalance)) {
-        updateStoredTokenBalance(Number(tokenResponse.tokenBalance))
-      }
+      applyTokenAwardToStoredBalance(tokenAward, tokenResponse?.tokenBalance)
 
-      console.log('Feedback response:', response)
-      const feedbackText = `${response?.feedback || 'Good attempt!'}\n\nTokens earned: +${tokenAward}`
-      setFeedback(feedbackText)
+      if (correct) {
+        // Skip AI feedback for correct MCQ answers to avoid noisy/failed feedback states.
+        setFeedback('')
+      } else {
+        console.log('Sending feedback request for MCQ...')
+        const response = await apiService.getLearningFeedback({
+          userAnswer: selectedAnswer,
+          correctAnswer: questionData.correctAnswer,
+          questionText: questionData.question,
+          userId: userData.userId,
+          questionType: 'mcq'
+        })
+
+        console.log('Feedback response:', response)
+        const feedbackText = `${response?.feedback || 'Good attempt!'}\n\nTokens earned: +${tokenAward}`
+        setFeedback(feedbackText)
+      }
     } catch (error) {
       console.error('Feedback error:', error)
       setFeedback('Error: ' + (error?.message || 'Could not generate feedback right now.'))
@@ -232,10 +261,14 @@ const Challenges = () => {
       setIsCorrect(correct)
       const tokenAward = Number(evaluation?.tokenAward || 0)
       setLatestTokenAward(tokenAward)
-      if (Number.isFinite(evaluation?.tokenBalance)) {
-        updateStoredTokenBalance(Number(evaluation.tokenBalance))
-      }
+      applyTokenAwardToStoredBalance(tokenAward, evaluation?.tokenBalance)
       console.log('Code evaluation - Correct:', correct, 'Score:', evaluation.score)
+
+      const normalisedScore = Number(evaluation?.score || 0)
+      if (normalisedScore === 100) {
+        setFeedback('')
+        return
+      }
 
       // Get AI feedback
       console.log('Getting feedback for code...')
@@ -300,9 +333,7 @@ const Challenges = () => {
       })
       tokenAward = Number(tokenResponse?.tokenAward || 0)
       setLatestTokenAward(tokenAward)
-      if (Number.isFinite(tokenResponse?.tokenBalance)) {
-        updateStoredTokenBalance(Number(tokenResponse.tokenBalance))
-      }
+      applyTokenAwardToStoredBalance(tokenAward, tokenResponse?.tokenBalance)
 
       console.log('Feedback response:', feedbackResponse)
       const feedbackText = `${feedbackResponse?.feedback || 'Great effort! Review your understanding and try again.'}\n\nTokens earned: +${tokenAward}`
@@ -322,17 +353,117 @@ const Challenges = () => {
     return null
   }
 
+  const handleCodeEditorKeyDown = (event) => {
+    const INDENT = '    '
+
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      const start = event.target.selectionStart
+      const end = event.target.selectionEnd
+      const before = codeAnswer.substring(0, start)
+      const after = codeAnswer.substring(end)
+      const currentLineStart = before.lastIndexOf('\n') + 1
+      const currentLine = before.substring(currentLineStart)
+      const leadingWhitespace = currentLine.match(/^\s*/)?.[0] || ''
+      const shouldIncreaseIndent = /:\s*$/.test(currentLine.trim())
+      const nextIndent = shouldIncreaseIndent ? `${leadingWhitespace}${INDENT}` : leadingWhitespace
+      const insertText = `\n${nextIndent}`
+      const newCode = `${before}${insertText}${after}`
+
+      setCodeAnswer(newCode)
+      setTimeout(() => {
+        const cursorPos = start + insertText.length
+        event.target.selectionStart = cursorPos
+        event.target.selectionEnd = cursorPos
+      }, 0)
+      return
+    }
+
+    if (event.key !== 'Tab') {
+      return
+    }
+
+    event.preventDefault()
+    const start = event.target.selectionStart
+    const end = event.target.selectionEnd
+    const hasSelection = start !== end
+
+    if (hasSelection) {
+      const selectionStartLine = codeAnswer.lastIndexOf('\n', start - 1) + 1
+      const selectionEndLineBreak = codeAnswer.indexOf('\n', end)
+      const selectionEndLine = selectionEndLineBreak === -1 ? codeAnswer.length : selectionEndLineBreak
+      const selectedBlock = codeAnswer.substring(selectionStartLine, selectionEndLine)
+      const selectedLines = selectedBlock.split('\n')
+
+      let adjustedLines
+      if (event.shiftKey) {
+        adjustedLines = selectedLines.map((line) => {
+          if (line.startsWith(INDENT)) return line.slice(INDENT.length)
+          if (line.startsWith('  ')) return line.slice(2)
+          return line.replace(/^\s/, '')
+        })
+      } else {
+        adjustedLines = selectedLines.map((line) => `${INDENT}${line}`)
+      }
+
+      const replacement = adjustedLines.join('\n')
+      const newCode = `${codeAnswer.substring(0, selectionStartLine)}${replacement}${codeAnswer.substring(selectionEndLine)}`
+      setCodeAnswer(newCode)
+
+      setTimeout(() => {
+        const selectionDelta = replacement.length - selectedBlock.length
+        event.target.selectionStart = selectionStartLine
+        event.target.selectionEnd = end + selectionDelta
+      }, 0)
+      return
+    }
+
+    if (event.shiftKey) {
+      const lineStart = codeAnswer.lastIndexOf('\n', start - 1) + 1
+      const linePrefix = codeAnswer.substring(lineStart, start)
+      let charsToRemove = 0
+
+      if (linePrefix.endsWith(INDENT)) {
+        charsToRemove = INDENT.length
+      } else {
+        const whitespaceMatch = linePrefix.match(/\s+$/)
+        if (whitespaceMatch) {
+          charsToRemove = Math.min(whitespaceMatch[0].length, INDENT.length)
+        }
+      }
+
+      if (charsToRemove > 0) {
+        const newCode = `${codeAnswer.substring(0, start - charsToRemove)}${codeAnswer.substring(end)}`
+        setCodeAnswer(newCode)
+        setTimeout(() => {
+          const cursorPos = start - charsToRemove
+          event.target.selectionStart = cursorPos
+          event.target.selectionEnd = cursorPos
+        }, 0)
+      }
+      return
+    }
+
+    const newCode = `${codeAnswer.substring(0, start)}${INDENT}${codeAnswer.substring(end)}`
+    setCodeAnswer(newCode)
+    setTimeout(() => {
+      const cursorPos = start + INDENT.length
+      event.target.selectionStart = cursorPos
+      event.target.selectionEnd = cursorPos
+    }, 0)
+  }
+
   return (
     <div className="challenges-page">
       <div className="challenges-card">
         <h1>Next Step: Practice Challenges</h1>
-        <p>Keep improving with practical coding challenges. Python Basics is a balanced mix, while specialized topics focus on hands-on code exercises.</p>
+        <p>Keep improving with practical coding challenges. Python Basics is a balanced mix, while specialised topics focus on hands-on code exercises.</p>
 
         {profileLoading && <p>Loading your challenge level...</p>}
 
         {!profileLoading && !aptitudeReady && (
           <div className="challenge-warning">
-            <p>Complete your aptitude test first so we can personalize your challenge difficulty.</p>
+            <p>Complete your aptitude test first so we can personalise your challenge difficulty.</p>
             <Link to="/aptitude-test">Go to Aptitude Test</Link>
           </div>
         )}
@@ -414,6 +545,7 @@ const Challenges = () => {
               <>
                 <div className="code-editor-section">
                   <textarea
+                    onKeyDown={handleCodeEditorKeyDown}
                     value={codeAnswer}
                     onChange={(event) => setCodeAnswer(event.target.value)}
                     placeholder="Write your Python code here..."
@@ -504,7 +636,7 @@ const Challenges = () => {
               </div>
             )}
 
-            {answerChecked && !feedback && (
+            {answerChecked && !feedback && isSubmitting && (
               <div className="challenge-feedback">
                 <p><em>Generating feedback...</em></p>
               </div>
