@@ -18,6 +18,8 @@ const NavBar = ({ userLevel, tokenBalance = 0, isAuthenticated, onLogout }) => {
 
             {isAuthenticated && (
               <>
+                <li><button className="nav-action" onClick={() => navigate('/game-home')}>Race</button></li>
+                <li><button className="nav-action" onClick={() => navigate('/garage')}>Garage</button></li>
                 <li><button className="nav-action" onClick={() => navigate('/challenges')}>Challenges</button></li>
                 <li><button className="nav-action" onClick={() => navigate('/profile')}>Profile</button></li>
                 <li><span className="token-display">Tokens: {tokenBalance}</span></li>

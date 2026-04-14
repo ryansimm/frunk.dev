@@ -34,3 +34,25 @@
 .button-link:hover {
     text-decoration: none;
 }
+
+.home-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.home-garage-link-wrap {
+    margin-top: 12px;
+}
+
+.home-garage-link {
+    color: #ffffff;
+    text-decoration: underline;
+    font-weight: 600;
+}
+
+.home-garage-link:hover {
+    opacity: 0.9;
+}

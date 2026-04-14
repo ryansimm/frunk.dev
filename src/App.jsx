@@ -7,6 +7,9 @@ import AptitudeTest from './components/AptitudeTest/AptitudeTest'
 import UserProfile from './components/UserProfile/UserProfile'
 import Login from './components/Login/Login'
 import Challenges from './components/Challenges/Challenges'
+import GameHome from './components/GameHome/GameHome'
+import TheGarage from './components/TheGarage/TheGarage'
+import RaceView from './components/RaceView/RaceView'
 import { getAptitudeResults } from './utils/levelSystem'
 import { apiService } from './services/api'
 
@@ -170,6 +173,21 @@ const AppContent = () => {
           <Route path="/challenges" element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
               <Challenges />
+            </ProtectedRoute>
+          } />
+          <Route path="/game-home" element={
+            <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <GameHome />
+            </ProtectedRoute>
+          } />
+          <Route path="/garage" element={
+            <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <TheGarage />
+            </ProtectedRoute>
+          } />
+          <Route path="/race" element={
+            <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <RaceView />
             </ProtectedRoute>
           } />
           <Route path="*" element={

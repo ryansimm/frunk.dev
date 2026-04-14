@@ -1,0 +1,403 @@
+.game-home-container {
+  min-height: 100vh;
+  padding: 24px 20px 40px;
+  background: linear-gradient(rgba(64, 61, 86, 0.7)), url('../../assets/Background.png');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 98px;
+}
+
+.game-home-card {
+  width: min(980px, 95%);
+  background: white;
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 138px);
+}
+
+/* Action Buttons Section */
+.action-buttons-section {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-start;
+  margin-bottom: 20px;
+}
+
+.action-btn {
+  flex: 0 1 auto;
+  border: 1px solid #d1d5db;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: #1f2937;
+}
+
+.action-btn:hover {
+  background: #e5e7eb;
+}
+
+.earn-btn,
+.race-btn {
+  background: #f3f4f6;
+}
+
+/* Main Game Content */
+.game-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.track-section,
+.car-section {
+  width: 100%;
+}
+
+/* Track Section */
+.track-section h2 {
+  font-size: 1.3rem;
+  color: #1f2937;
+  margin: 0 0 16px 0;
+  font-weight: 600;
+}
+
+.track-selector-layout {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.track-wheel-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.carousel-nav {
+  width: 42px;
+  min-width: 42px;
+  height: auto;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f3f4f6;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.carousel-nav:hover {
+  background: #e5e7eb;
+}
+
+.track-wheel {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  gap: 8px;
+}
+
+.track-wheel-item {
+  flex: 1;
+  padding: 10px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 110px;
+  flex-direction: column;
+}
+
+.track-wheel-item.selected {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  min-height: 118px;
+}
+
+.track-logo {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.track-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.track-wheel-item h3 {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.track-wheel-item.adjacent {
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.track-wheel-item.adjacent:hover {
+  opacity: 1;
+  background: #f9fafb;
+}
+
+.difficulty {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.difficulty.easy {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.difficulty.medium {
+  background: #fef08a;
+  color: #854d0e;
+}
+
+.difficulty.hard {
+  background: #fed7aa;
+  color: #92400e;
+}
+
+.difficulty.expert {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.track-info {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  min-height: auto;
+  align-self: stretch;
+}
+
+.track-info h3 {
+  margin: 0 0 8px 0;
+  color: #1f2937;
+  font-size: 1.1rem;
+}
+
+.track-info p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.track-info span {
+  font-weight: 600;
+}
+
+/* Car Section */
+.car-section h2 {
+  font-size: 1.3rem;
+  color: #1f2937;
+  margin: 0 0 16px 0;
+  font-weight: 600;
+}
+
+.car-display {
+  background: #f3f4f6;
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 24px 20px;
+  text-align: center;
+  margin-bottom: 12px;
+  min-height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.car-placeholder {
+  font-size: 1.1rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.car-placeholder img {
+  width: 100%;
+  max-width: 110px;
+  height: auto;
+  object-fit: contain;
+}
+
+.car-info {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.car-info h3 {
+  margin: 0 0 6px 0;
+  color: #1f2937;
+  font-size: 1.1rem;
+}
+
+.car-info p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.car-info span {
+  font-weight: 600;
+}
+
+.car-stats-list {
+  display: grid;
+  gap: 8px;
+}
+
+.car-stat-row {
+  display: grid;
+  gap: 5px;
+}
+
+.car-stat-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.92rem;
+  color: #4b5563;
+}
+
+.car-stat-meta strong {
+  color: #111827;
+}
+
+.car-stat-track {
+  width: 100%;
+  height: 9px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.car-stat-fill {
+  height: 100%;
+  background: #9ca3af;
+  border-radius: 999px;
+}
+
+.customize-btn {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #1f2937;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.customize-btn:hover {
+  background: #e5e7eb;
+}
+
+.car-action-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.start-race-btn {
+  flex: 2;
+  min-width: 220px;
+}
+
+.car-action-row .customize-btn {
+  flex: 1;
+  width: auto;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .game-home-card {
+    padding: 20px 16px;
+    min-height: auto;
+  }
+
+  .action-buttons-section {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .action-btn {
+    width: 100%;
+  }
+
+  .game-content {
+    gap: 16px;
+  }
+
+  .track-wheel-controls {
+    gap: 8px;
+  }
+
+  .carousel-nav {
+    width: 38px;
+    min-width: 38px;
+  }
+
+  .track-wheel {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .track-wheel-item {
+    min-width: 130px;
+  }
+
+  .track-info {
+    min-height: auto;
+  }
+
+  .car-action-row {
+    flex-direction: column;
+  }
+
+  .car-action-row .customize-btn,
+  .start-race-btn {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
