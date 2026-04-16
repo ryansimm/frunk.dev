@@ -34,7 +34,8 @@ export function createAuthRoutes({ db }) {
             role: user.role || 'user',
             aptitudeCompleted: Boolean(user.aptitudeCompleted),
             tokenBalance: Number(user.tokenBalance || 0),
-            totalTokensEarned: Number(user.totalTokensEarned || 0)
+            totalTokensEarned: Number(user.totalTokensEarned || 0),
+            totalTokensSpent: Number(user.totalTokensSpent || 0)
         };
     }
 
@@ -71,6 +72,7 @@ export function createAuthRoutes({ db }) {
             aptitudeCompleted: false,
             tokenBalance: 0,
             totalTokensEarned: 0,
+            totalTokensSpent: 0,
             createdBySystem: true
         });
 
@@ -126,7 +128,8 @@ export function createAuthRoutes({ db }) {
                 createdAt: new Date(),
                 aptitudeCompleted: false,
                 tokenBalance: 0,
-                totalTokensEarned: 0
+                totalTokensEarned: 0,
+                totalTokensSpent: 0
             };
 
             const result = await db.collection('users').insertOne(user);
@@ -227,7 +230,8 @@ export function createAuthRoutes({ db }) {
                 createdAt: new Date(),
                 aptitudeCompleted: false,
                 tokenBalance: 0,
-                totalTokensEarned: 0
+                totalTokensEarned: 0,
+                totalTokensSpent: 0
             };
 
             const result = await db.collection('users').insertOne(user);
@@ -301,6 +305,66 @@ export function createAuthRoutes({ db }) {
         } catch (error) {
             console.error('Failed to fetch profile:', error);
             res.status(500).json({ error: 'Failed to fetch profile' });
+        }
+    });
+
+    router.post('/auth/spend-tokens', authenticateRequest, async (req, res) => {
+        const amount = Number(req.body?.amount || 0);
+        const reason = String(req.body?.reason || 'purchase').slice(0, 80);
+        const itemId = String(req.body?.itemId || '').slice(0, 80);
+        const itemName = String(req.body?.itemName || '').slice(0, 120);
+
+        if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
+            return res.status(400).json({ error: 'Amount must be a positive whole number' });
+        }
+
+        try {
+            const userObjectId = new ObjectId(req.auth.sub);
+            const updateResult = await db.collection('users').findOneAndUpdate(
+                {
+                    _id: userObjectId,
+                    tokenBalance: { $gte: amount }
+                },
+                {
+                    $inc: {
+                        tokenBalance: -amount,
+                        totalTokensSpent: amount
+                    },
+                    $set: { updatedAt: new Date() }
+                },
+                { returnDocument: 'after' }
+            );
+
+            const updatedUser = updateResult?.value ?? updateResult;
+            if (!updatedUser) {
+                return res.status(400).json({ error: 'Insufficient token balance' });
+            }
+
+            const totalTokensEarned = Number(updatedUser.totalTokensEarned || 0);
+            const totalTokensSpent = Number(updatedUser.totalTokensSpent || 0);
+
+            await db.collection('token_spend_events').insertOne({
+                userId: updatedUser._id.toString(),
+                amount,
+                reason,
+                itemId,
+                itemName,
+                tokenBalanceAfterSpend: Number(updatedUser.tokenBalance || 0),
+                totalTokensEarned,
+                totalTokensSpent,
+                createdAt: new Date()
+            });
+
+            return res.json({
+                success: true,
+                tokenBalance: Number(updatedUser.tokenBalance || 0),
+                totalTokensEarned,
+                totalTokensSpent,
+                availableTokens: Math.max(0, totalTokensEarned - totalTokensSpent)
+            });
+        } catch (error) {
+            console.error('Spend tokens error:', error);
+            return res.status(500).json({ error: 'Failed to spend tokens' });
         }
     });
 

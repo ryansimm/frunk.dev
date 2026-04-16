@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import './TheGarage.css'
 import logo from '../../assets/logo.png'
+import { apiService } from '../../services/api'
 
 const STAT_KEYS = ['Acceleration', 'Handling', 'Braking', 'Top Speed']
 const BASE_STATS = {
@@ -12,6 +13,14 @@ const BASE_STATS = {
 
 const GARAGE_STORE = {
   Wheels: [
+    {
+      id: 'wheels-stock',
+      name: 'Stock Wheels',
+      cost: 0,
+      image: logo,
+      effects: {},
+      isStock: true
+    },
     {
       id: 'wheels-classic',
       name: 'Classic Wheels',
@@ -36,6 +45,14 @@ const GARAGE_STORE = {
   ],
   Wings: [
     {
+      id: 'wing-stock',
+      name: 'Stock Wing',
+      cost: 0,
+      image: logo,
+      effects: {},
+      isStock: true
+    },
+    {
       id: 'wing-basic',
       name: 'Basic Wing',
       cost: 25,
@@ -58,6 +75,14 @@ const GARAGE_STORE = {
     }
   ],
   Decal: [
+    {
+      id: 'decal-stock',
+      name: 'Stock Decal',
+      cost: 0,
+      image: logo,
+      effects: {},
+      isStock: true
+    },
     {
       id: 'decal-stripes',
       name: 'Speed Stripes',
@@ -82,6 +107,14 @@ const GARAGE_STORE = {
   ],
   Colour: [
     {
+      id: 'colour-stock',
+      name: 'Stock Colour',
+      cost: 0,
+      image: logo,
+      effects: {},
+      isStock: true
+    },
+    {
       id: 'colour-racing-red',
       name: 'Racing Red',
       cost: 20,
@@ -105,6 +138,15 @@ const GARAGE_STORE = {
   ]
 }
 
+const STOCK_SETUP = {
+  Wheels: 'wheels-stock',
+  Wings: 'wing-stock',
+  Decal: 'decal-stock',
+  Colour: 'colour-stock'
+}
+
+const STOCK_ITEM_IDS = Object.values(STOCK_SETUP)
+
 const PURCHASES_KEY = 'garagePurchases'
 const EQUIPPED_KEY = 'garageEquipped'
 const STATS_KEY = 'garagePerformanceStats'
@@ -123,9 +165,10 @@ const readOwnedItems = () => {
   try {
     const raw = localStorage.getItem(PURCHASES_KEY)
     const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed : []
+    const purchasedItems = Array.isArray(parsed) ? parsed : []
+    return [...new Set([...STOCK_ITEM_IDS, ...purchasedItems])]
   } catch {
-    return []
+    return [...STOCK_ITEM_IDS]
   }
 }
 
@@ -156,6 +199,7 @@ const TheGarage = () => {
   const [equippedItems, setEquippedItems] = useState(readEquippedItems)
   const [statusMessage, setStatusMessage] = useState('')
   const [currentVehicleName] = useState(readCurrentVehicle)
+  const [pendingPurchaseId, setPendingPurchaseId] = useState('')
 
   const ownedSet = useMemo(() => new Set(ownedItems), [ownedItems])
   const itemLookup = useMemo(() => {
@@ -206,7 +250,7 @@ const TheGarage = () => {
     setStatusMessage(`Equipped ${item.name}.`)
   }
 
-  const handlePurchase = (sectionName, item) => {
+  const handlePurchase = async (sectionName, item) => {
     if (ownedSet.has(item.id)) {
       setStatusMessage(`${item.name} is already owned.`)
       return
@@ -217,31 +261,52 @@ const TheGarage = () => {
       return
     }
 
-    const updatedBalance = tokenBalance - item.cost
-    const nextOwnedItems = [...ownedItems, item.id]
+    setPendingPurchaseId(item.id)
 
-    setTokenBalance(updatedBalance)
-    setOwnedItems(nextOwnedItems)
-    setStatusMessage(`Purchased ${item.name} for ${item.cost} tokens.`)
+    try {
+      const spendResult = await apiService.spendTokens({
+        amount: item.cost,
+        reason: 'garage_purchase',
+        itemId: item.id,
+        itemName: item.name
+      })
 
-    localStorage.setItem(PURCHASES_KEY, JSON.stringify(nextOwnedItems))
+      const serverBalance = Number(spendResult?.tokenBalance)
+      const updatedBalance = Number.isFinite(serverBalance)
+        ? serverBalance
+        : tokenBalance - item.cost
 
-    const nextEquipped = {
-      ...equippedItems,
-      [sectionName]: item.id
+      const nextOwnedItems = [...ownedItems, item.id]
+
+      setTokenBalance(updatedBalance)
+      setOwnedItems(nextOwnedItems)
+      setStatusMessage(`Purchased ${item.name} for ${item.cost} tokens.`)
+
+      localStorage.setItem(PURCHASES_KEY, JSON.stringify(nextOwnedItems))
+
+      const nextEquipped = {
+        ...equippedItems,
+        [sectionName]: item.id
+      }
+      setEquippedItems(nextEquipped)
+      localStorage.setItem(EQUIPPED_KEY, JSON.stringify(nextEquipped))
+
+      const storedUser = JSON.parse(localStorage.getItem('user') || '{}')
+      localStorage.setItem('user', JSON.stringify({
+        ...storedUser,
+        tokenBalance: updatedBalance,
+        totalTokensEarned: Number(spendResult?.totalTokensEarned ?? storedUser.totalTokensEarned ?? 0),
+        totalTokensSpent: Number(spendResult?.totalTokensSpent ?? storedUser.totalTokensSpent ?? 0)
+      }))
+
+      window.dispatchEvent(new CustomEvent('tokenBalanceUpdated', {
+        detail: { tokenBalance: updatedBalance }
+      }))
+    } catch (purchaseError) {
+      setStatusMessage(purchaseError?.response?.data?.error || purchaseError?.message || `Unable to purchase ${item.name}.`)
+    } finally {
+      setPendingPurchaseId('')
     }
-    setEquippedItems(nextEquipped)
-    localStorage.setItem(EQUIPPED_KEY, JSON.stringify(nextEquipped))
-
-    const storedUser = JSON.parse(localStorage.getItem('user') || '{}')
-    localStorage.setItem('user', JSON.stringify({
-      ...storedUser,
-      tokenBalance: updatedBalance
-    }))
-
-    window.dispatchEvent(new CustomEvent('tokenBalanceUpdated', {
-      detail: { tokenBalance: updatedBalance }
-    }))
   }
 
   return (
@@ -279,7 +344,7 @@ const TheGarage = () => {
                           )}
                         </div>
                         <h3>{item.name}</h3>
-                        <p>Cost: {item.cost} tokens</p>
+                        <p>{isOwned ? 'Owned' : `Cost: ${item.cost} tokens`}</p>
                         <ul className="garage-item-effects">
                           {STAT_KEYS.map((key) => {
                             const delta = Number(item.effects?.[key] || 0)
@@ -297,9 +362,15 @@ const TheGarage = () => {
                           type="button"
                           className="garage-action"
                           onClick={() => handlePurchase(sectionName, item)}
-                          disabled={isOwned || !canAfford}
+                          disabled={isOwned || !canAfford || pendingPurchaseId === item.id}
                         >
-                          {isOwned ? 'Owned' : canAfford ? 'Purchase' : 'Not Enough Tokens'}
+                          {isOwned
+                            ? 'Owned'
+                            : pendingPurchaseId === item.id
+                              ? 'Purchasing...'
+                              : canAfford
+                                ? 'Purchase'
+                                : 'Not Enough Tokens'}
                         </button>
                         <button
                           type="button"

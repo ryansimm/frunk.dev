@@ -324,7 +324,7 @@ Rules:
         try {
             const user = await db.collection('users').findOne(
                 { _id: toObjectId(userId) },
-                { projection: { tokenBalance: 1, totalTokensEarned: 1 } }
+                { projection: { tokenBalance: 1, totalTokensEarned: 1, totalTokensSpent: 1 } }
             );
 
             if (!user) {
@@ -333,7 +333,9 @@ Rules:
 
             res.json({
                 tokenBalance: user.tokenBalance || 0,
-                totalTokensEarned: user.totalTokensEarned || 0
+                totalTokensEarned: user.totalTokensEarned || 0,
+                totalTokensSpent: user.totalTokensSpent || 0,
+                availableTokens: Math.max(0, Number(user.totalTokensEarned || 0) - Number(user.totalTokensSpent || 0))
             });
         } catch (error) {
             console.error('Failed to fetch token balance:', error);

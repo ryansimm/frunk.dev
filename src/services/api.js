@@ -138,5 +138,18 @@ export const apiService ={
             questionText
         });
         return response.data;
+    },
+
+    spendTokens: async ({ amount, reason = 'purchase', itemId = '', itemName = '' }) => {
+        const response = await axios.post(`${API_BASE_URL}/auth/spend-tokens`, {
+            amount,
+            reason,
+            itemId,
+            itemName
+        }, {
+            headers: authHeaders()
+        });
+
+        return response.data;
     }
 };
