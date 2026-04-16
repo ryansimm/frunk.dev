@@ -10,6 +10,7 @@ import Challenges from './components/Challenges/Challenges'
 import GameHome from './components/GameHome/GameHome'
 import TheGarage from './components/TheGarage/TheGarage'
 import RaceView from './components/RaceView/RaceView'
+import AdminCreateUser from './components/AdminCreateUser/AdminCreateUser'
 import { getAptitudeResults } from './utils/levelSystem'
 import { apiService } from './services/api'
 
@@ -23,9 +24,30 @@ const ProtectedRoute = ({ isAuthenticated, children }) => {
   return children
 }
 
+const AdminRoute = ({ isAuthenticated, isAdmin, children }) => {
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
+  if (!isAdmin) {
+    return <Navigate to="/" replace />
+  }
+
+  return children
+}
+
 const AppContent = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return Boolean(localStorage.getItem('authToken') && localStorage.getItem('user'))
+  })
+
+  const [isAdmin, setIsAdmin] = useState(() => {
+    try {
+      const userData = JSON.parse(localStorage.getItem('user') || '{}')
+      return userData?.role === 'admin'
+    } catch {
+      return false
+    }
   })
 
   const [hasCompletedAptitude, setHasCompletedAptitude] = useState(() => {
@@ -54,13 +76,38 @@ const AppContent = () => {
   })
 
   useEffect(() => {
+    const syncAuthState = () => {
+      const hasAuth = Boolean(localStorage.getItem('authToken') && localStorage.getItem('user'))
+      setIsAuthenticated(hasAuth)
+
+      if (!hasAuth) {
+        setTokenBalance(0)
+        setHasCompletedAptitude(false)
+        setIsAdmin(false)
+        return
+      }
+
+      try {
+        const userData = JSON.parse(localStorage.getItem('user') || '{}')
+        setTokenBalance(Number(userData?.tokenBalance || 0))
+        setHasCompletedAptitude(Boolean(userData?.aptitudeCompleted))
+        setIsAdmin(userData?.role === 'admin')
+      } catch {
+        setTokenBalance(0)
+        setHasCompletedAptitude(false)
+        setIsAdmin(false)
+      }
+    }
+
     const handleStorageChange = () => {
-      setIsAuthenticated(Boolean(localStorage.getItem('authToken') && localStorage.getItem('user')))
+      syncAuthState()
     }
 
     const handleAuthChange = () => {
-      setIsAuthenticated(Boolean(localStorage.getItem('authToken') && localStorage.getItem('user')))
+      syncAuthState()
     }
+
+    syncAuthState()
 
     window.addEventListener('storage', handleStorageChange)
     window.addEventListener('authStateChanged', handleAuthChange)
@@ -71,6 +118,10 @@ const AppContent = () => {
   }, [])
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return
+    }
+
     const userData = localStorage.getItem('user')
     if (!userData) {
       return
@@ -90,8 +141,10 @@ const AppContent = () => {
 
         setTokenBalance(freshBalance)
         setHasCompletedAptitude(aptitudeCompleted)
+        setIsAdmin(profileData?.user?.role === 'admin')
         localStorage.setItem('user', JSON.stringify({
           ...parsedUser,
+          role: profileData?.user?.role || parsedUser.role,
           tokenBalance: freshBalance,
           aptitudeCompleted
         }))
@@ -101,7 +154,7 @@ const AppContent = () => {
     }
 
     syncTokenBalance()
-  }, [])
+  }, [isAuthenticated])
 
   useEffect(() => {
     const onTokenUpdate = (event) => {
@@ -140,6 +193,7 @@ const AppContent = () => {
     setTokenBalance(0)
     setUserLevel(null)
     setHasCompletedAptitude(false)
+    setIsAdmin(false)
     setIsAuthenticated(false)
   }
 
@@ -149,6 +203,7 @@ const AppContent = () => {
         userLevel={userLevel}
         tokenBalance={tokenBalance}
         isAuthenticated={isAuthenticated}
+        isAdmin={isAdmin}
         onLogout={handleLogout}
       />
       <main className="app-content">
@@ -189,6 +244,11 @@ const AppContent = () => {
             <ProtectedRoute isAuthenticated={isAuthenticated}>
               <RaceView />
             </ProtectedRoute>
+          } />
+          <Route path="/admin/users/create" element={
+            <AdminRoute isAuthenticated={isAuthenticated} isAdmin={isAdmin}>
+              <AdminCreateUser />
+            </AdminRoute>
           } />
           <Route path="*" element={
             <Navigate to={isAuthenticated ? '/' : '/login'} replace />

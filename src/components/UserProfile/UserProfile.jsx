@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { apiService } from '../../services/api'
 import './UserProfile.css'
 
 const UserProfile = () => {
+  const navigate = useNavigate()
   const [user, setUser] = useState(null)
   const [results, setResults] = useState(null)
   const [progressStats, setProgressStats] = useState({ attempted: 0, correct: 0 })
@@ -59,6 +61,13 @@ const UserProfile = () => {
               <span className="stat-value">{progressStats.correct}</span>
             </div>
           </div>
+          <button
+            type="button"
+            className="profile-home-button"
+            onClick={() => navigate('/')}
+          >
+            Return to Home
+          </button>
         </div>
       </div>
     )
@@ -90,6 +99,13 @@ const UserProfile = () => {
             <span className="stat-value">{progressStats.correct}</span>
           </div>
         </div>
+        <button
+          type="button"
+          className="profile-home-button"
+          onClick={() => navigate('/')}
+        >
+          Return to Home
+        </button>
       </div>
     </div>
   )

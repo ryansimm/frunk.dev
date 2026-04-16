@@ -198,8 +198,8 @@ export function createAuthRoutes({ db }) {
         }
     });
 
-    // Public signup endpoint - anyone can create a regular user account
-    router.post('/auth/signup', async (req, res) => {
+    // Admin-authenticated signup endpoint.
+    router.post('/auth/signup', authenticateRequest, requireAdmin, async (req, res) => {
         await seedAdminPromise;
         const { email, password, name } = req.body;
 
@@ -233,13 +233,9 @@ export function createAuthRoutes({ db }) {
             const result = await db.collection('users').insertOne(user);
             const insertedUser = await db.collection('users').findOne({ _id: result.insertedId });
 
-            // Log in the newly created user
-            const token = createAuthToken(insertedUser);
-
             res.json({
                 success: true,
                 userId: result.insertedId.toString(),
-                token,
                 user: sanitiseUser(insertedUser)
             });
         } catch (error) {

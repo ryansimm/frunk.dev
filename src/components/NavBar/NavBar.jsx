@@ -4,7 +4,7 @@ import './NavBar.css'
 import logo from '../../assets/logo.png'
 
 
-const NavBar = ({ userLevel, tokenBalance = 0, isAuthenticated, onLogout }) => {
+const NavBar = ({ userLevel, tokenBalance = 0, isAuthenticated, isAdmin, onLogout }) => {
   const navigate = useNavigate()
 
   return (
@@ -22,6 +22,7 @@ const NavBar = ({ userLevel, tokenBalance = 0, isAuthenticated, onLogout }) => {
                 <li><button className="nav-action" onClick={() => navigate('/garage')}>Garage</button></li>
                 <li><button className="nav-action" onClick={() => navigate('/challenges')}>Challenges</button></li>
                 <li><button className="nav-action" onClick={() => navigate('/profile')}>Profile</button></li>
+                {isAdmin && <li><button className="nav-action" onClick={() => navigate('/admin/users/create')}>Admin</button></li>}
                 <li><span className="token-display">Tokens: {tokenBalance}</span></li>
                 <li><button className="nav-action" onClick={onLogout}>Logout</button></li>
               </>

@@ -15,92 +15,92 @@ const GARAGE_STORE = {
     {
       id: 'wheels-classic',
       name: 'Classic Wheels',
-      cost: 15,
+      cost: 10,
       image: logo,
-      effects: { Acceleration: 4, Handling: 2 }
+      effects: { Acceleration: 10, Handling: 5 }
     },
     {
       id: 'wheels-rally',
       name: 'Rally Wheels',
-      cost: 25,
+      cost: 30,
       image: logo,
-      effects: { Handling: 6, Braking: 3, 'Top Speed': -1 }
+      effects: { Handling: 15, Braking: 10, 'Top Speed': -2 }
     },
     {
       id: 'wheels-carbon',
       name: 'Carbon Wheels',
-      cost: 35,
+      cost: 50,
       image: logo,
-      effects: { Acceleration: 5, 'Top Speed': 7, Braking: -1 }
+      effects: { Acceleration: 25, 'Top Speed': 17, Braking: -3 }
     }
   ],
   Wings: [
     {
       id: 'wing-basic',
       name: 'Basic Wing',
-      cost: 20,
+      cost: 25,
       image: logo,
-      effects: { Handling: 4, Braking: 1 }
+      effects: { Handling: 10, Braking: 3 }
     },
     {
       id: 'wing-track',
       name: 'Track Wing',
-      cost: 30,
+      cost: 40,
       image: logo,
-      effects: { Handling: 7, Braking: 2, 'Top Speed': -2 }
+      effects: { Handling: 20, Braking: 10, 'Top Speed': -2 }
     },
     {
       id: 'wing-aero',
       name: 'Aero Wing',
-      cost: 45,
+      cost: 55,
       image: logo,
-      effects: { 'Top Speed': 8, Handling: 2, Braking: -2 }
+      effects: { 'Top Speed': 18, Handling: 30, Braking: -2 }
     }
   ],
   Decal: [
     {
       id: 'decal-stripes',
       name: 'Speed Stripes',
-      cost: 10,
+      cost: 15,
       image: logo,
-      effects: { Acceleration: 2 }
+      effects: { Acceleration: 2, Braking : 10 }
     },
     {
       id: 'decal-flames',
       name: 'Flame Pack',
-      cost: 18,
+      cost: 30,
       image: logo,
-      effects: { 'Top Speed': 2, Acceleration: 1 }
+      effects: { 'Top Speed': 5, Acceleration: 5 }
     },
     {
       id: 'decal-lightning',
       name: 'Lightning Pack',
-      cost: 22,
+      cost: 45,
       image: logo,
-      effects: { Acceleration: 2, Handling: 1 }
+      effects: { Acceleration: 2, Handling: 1, Braking : 8}
     }
   ],
   Colour: [
     {
       id: 'colour-racing-red',
       name: 'Racing Red',
-      cost: 12,
+      cost: 20,
       image: logo,
-      effects: { Acceleration: 1, 'Top Speed': 1 }
+      effects: { Acceleration: 4, 'Top Speed': 6 }
     },
     {
       id: 'colour-midnight-blue',
       name: 'Midnight Blue',
-      cost: 12,
+      cost: 20,
       image: logo,
-      effects: { Handling: 1, Braking: 1 }
+      effects: { Handling: 3, Braking: 5 }
     },
     {
       id: 'colour-graphite-black',
       name: 'Graphite Black',
-      cost: 12,
+      cost: 20,
       image: logo,
-      effects: { Braking: 2 }
+      effects: { Braking: 15 }
     }
   ]
 }
@@ -318,7 +318,7 @@ const TheGarage = () => {
 
             <section className="garage-section garage-coming-soon">
               <h2>Body</h2>
-              <p>Coming Soon - Work in Progress.</p>
+              <p>Coming Soon - Work in Progress...</p>
             </section>
           </div>
 
