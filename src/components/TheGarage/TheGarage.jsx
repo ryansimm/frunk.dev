@@ -91,10 +91,10 @@ const GARAGE_STORE = {
   ],
   Decal: [
     {
-      id: 'decal-stock',
-      name: 'Stock Decal',
+      id: 'no-decal',
+      name: 'No Decal',
       cost: 0,
-      image: logo,
+      image: defaultAsset,
       effects: {},
       isStock: true
     },
@@ -156,14 +156,15 @@ const GARAGE_STORE = {
 const STOCK_SETUP = {
   Wheels: 'wheels-stock',
   Wings: 'no-wing',
-  Decal: 'decal-stock',
+  Decal: 'no-decal',
   Colour: 'no-paint'
 }
 
 const STOCK_ITEM_IDS = Object.values(STOCK_SETUP)
 const LEGACY_ITEM_IDS = {
   'wing-stock': 'no-wing',
-  'colour-stock': 'no-paint'
+  'colour-stock': 'no-paint',
+  'decal-stock': 'no-decal'
 }
 
 const PURCHASES_KEY = 'garagePurchases'
