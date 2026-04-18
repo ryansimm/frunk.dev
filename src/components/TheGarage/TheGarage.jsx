@@ -427,9 +427,6 @@ const TheGarage = () => {
           <div className="garage-sidebar-column">
             <aside className="garage-vehicle-column">
               <h2>Current Vehicle</h2>
-              <div className="garage-vehicle-preview">
-                <img src={logo} alt={currentVehicleName} className="garage-vehicle-image" />
-              </div>
               <p className="garage-vehicle-name">{currentVehicleName}</p>
 
               <section className="garage-stats-panel" aria-label="Performance stats chart">
