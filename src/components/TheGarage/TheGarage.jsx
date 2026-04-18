@@ -4,7 +4,7 @@ import logo from '../../assets/logo.png'
 import carbonwheel from '../../assets/CarbonWheels.png'
 import classicwheel from '../../assets/ClassicWheels.png'
 import flame from '../../assets/FlameDecal.png'
-import lightning from '../../assets/LightningDecak.png'
+import lightning from '../../assets/LightningDecal.png'
 import stripe from '../../assets/RacingStripes.png'
 import rallywheel from '../../assets/RallyWheels.png'
 import stockwheel from '../../assets/StockWheels.png'
@@ -53,8 +53,8 @@ const GARAGE_STORE = {
   ],
   Wings: [
     {
-      id: 'wing-stock',
-      name: 'Stock Wing',
+      id: 'no-wing',
+      name: 'No Wing',
       cost: 0,
       image: logo,
       effects: {},
@@ -148,12 +148,15 @@ const GARAGE_STORE = {
 
 const STOCK_SETUP = {
   Wheels: 'wheels-stock',
-  Wings: 'wing-stock',
+  Wings: 'no-wing',
   Decal: 'decal-stock',
   Colour: 'colour-stock'
 }
 
 const STOCK_ITEM_IDS = Object.values(STOCK_SETUP)
+const LEGACY_ITEM_IDS = {
+  'wing-stock': 'no-wing'
+}
 
 const PURCHASES_KEY = 'garagePurchases'
 const EQUIPPED_KEY = 'garageEquipped'
@@ -173,7 +176,9 @@ const readOwnedItems = () => {
   try {
     const raw = localStorage.getItem(PURCHASES_KEY)
     const parsed = raw ? JSON.parse(raw) : []
-    const purchasedItems = Array.isArray(parsed) ? parsed : []
+    const purchasedItems = Array.isArray(parsed)
+      ? parsed.map((itemId) => LEGACY_ITEM_IDS[itemId] || itemId)
+      : []
     return [...new Set([...STOCK_ITEM_IDS, ...purchasedItems])]
   } catch {
     return [...STOCK_ITEM_IDS]
@@ -184,7 +189,12 @@ const readEquippedItems = () => {
   try {
     const raw = localStorage.getItem(EQUIPPED_KEY)
     const parsed = raw ? JSON.parse(raw) : {}
-    return parsed && typeof parsed === 'object' ? parsed : {}
+    if (!parsed || typeof parsed !== 'object') return {}
+
+    return Object.entries(parsed).reduce((accumulator, [sectionName, itemId]) => {
+      accumulator[sectionName] = LEGACY_ITEM_IDS[itemId] || itemId
+      return accumulator
+    }, {})
   } catch {
     return {}
   }
