@@ -8,7 +8,7 @@ const Body = ({ hasCompletedAptitude }) => {
     <div className ="background container">
       <div className = "body-text">
         <h1>Coding made clearer</h1>
-        <p>In a world where AI is front and centre, coding skills are more importnant that ever.
+        <p>In a world where AI is front and centre, coding skills are more important that ever.
           The purpose of this space is to help you develop your skills making use of AI without it doing
           the work for you.</p>
 
