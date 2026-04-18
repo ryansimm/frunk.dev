@@ -115,8 +115,8 @@ const GARAGE_STORE = {
   ],
   Colour: [
     {
-      id: 'colour-stock',
-      name: 'Stock Colour',
+      id: 'no-paint',
+      name: 'No Paint',
       cost: 0,
       image: logo,
       effects: {},
@@ -150,12 +150,13 @@ const STOCK_SETUP = {
   Wheels: 'wheels-stock',
   Wings: 'no-wing',
   Decal: 'decal-stock',
-  Colour: 'colour-stock'
+  Colour: 'no-paint'
 }
 
 const STOCK_ITEM_IDS = Object.values(STOCK_SETUP)
 const LEGACY_ITEM_IDS = {
-  'wing-stock': 'no-wing'
+  'wing-stock': 'no-wing',
+  'colour-stock': 'no-paint'
 }
 
 const PURCHASES_KEY = 'garagePurchases'
