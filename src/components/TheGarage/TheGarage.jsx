@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import './TheGarage.css'
 import logo from '../../assets/logo.png'
+import carbonwheel from '../../assets/CarbonWheels.png'
+import classicwheel from '../../assets/ClassicWheels.png'
+import flame from '../../assets/FlameDecal.png'
+import lightning from '../../assets/LightningDecak.png'
+import stripe from '../../assets/RacingStripes.png'
+import rallywheel from '../../assets/RallyWheels.png'
+import stockwheel from '../../assets/StockWheels.png'
+
 import { apiService } from '../../services/api'
 
 const STAT_KEYS = ['Acceleration', 'Handling', 'Braking', 'Top Speed']
@@ -17,7 +25,7 @@ const GARAGE_STORE = {
       id: 'wheels-stock',
       name: 'Stock Wheels',
       cost: 0,
-      image: logo,
+      image: stockwheel,
       effects: {},
       isStock: true
     },
@@ -25,21 +33,21 @@ const GARAGE_STORE = {
       id: 'wheels-classic',
       name: 'Classic Wheels',
       cost: 10,
-      image: logo,
+      image: classicwheel,
       effects: { Acceleration: 10, Handling: 5 }
     },
     {
       id: 'wheels-rally',
       name: 'Rally Wheels',
       cost: 30,
-      image: logo,
+      image: rallywheel,
       effects: { Handling: 15, Braking: 10, 'Top Speed': -2 }
     },
     {
       id: 'wheels-carbon',
       name: 'Carbon Wheels',
       cost: 50,
-      image: logo,
+      image: carbonwheel,
       effects: { Acceleration: 25, 'Top Speed': 17, Braking: -3 }
     }
   ],
@@ -87,21 +95,21 @@ const GARAGE_STORE = {
       id: 'decal-stripes',
       name: 'Speed Stripes',
       cost: 15,
-      image: logo,
+      image: stripe,
       effects: { Acceleration: 2, Braking : 10 }
     },
     {
       id: 'decal-flames',
       name: 'Flame Pack',
       cost: 30,
-      image: logo,
+      image: flame,
       effects: { 'Top Speed': 5, Acceleration: 5 }
     },
     {
       id: 'decal-lightning',
       name: 'Lightning Pack',
       cost: 45,
-      image: logo,
+      image: lightning,
       effects: { Acceleration: 2, Handling: 1, Braking : 8}
     }
   ],
