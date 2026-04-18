@@ -8,6 +8,13 @@ import lightning from '../../assets/LightningDecal.png'
 import stripe from '../../assets/RacingStripes.png'
 import rallywheel from '../../assets/RallyWheels.png'
 import stockwheel from '../../assets/StockWheels.png'
+import defaultAsset from '../../assets/Default.png'
+import basicWing from '../../assets/BasicWing.png'
+import trackWing from '../../assets/TrackWing.png'
+import aeroWing from '../../assets/AeroWing.png'
+import racingRed from '../../assets/RacingRed.png'
+import midnightBlue from '../../assets/MidnightBlue.png'
+import graphiteBlack from '../../assets/GraphiteBlack.png'
 
 import { apiService } from '../../services/api'
 
@@ -56,7 +63,7 @@ const GARAGE_STORE = {
       id: 'no-wing',
       name: 'No Wing',
       cost: 0,
-      image: logo,
+      image: defaultAsset,
       effects: {},
       isStock: true
     },
@@ -64,21 +71,21 @@ const GARAGE_STORE = {
       id: 'wing-basic',
       name: 'Basic Wing',
       cost: 25,
-      image: logo,
+      image: basicWing,
       effects: { Handling: 10, Braking: 3 }
     },
     {
       id: 'wing-track',
       name: 'Track Wing',
       cost: 40,
-      image: logo,
+      image: trackWing,
       effects: { Handling: 20, Braking: 10, 'Top Speed': -2 }
     },
     {
       id: 'wing-aero',
       name: 'Aero Wing',
       cost: 55,
-      image: logo,
+      image: aeroWing,
       effects: { 'Top Speed': 18, Handling: 30, Braking: -2 }
     }
   ],
@@ -118,7 +125,7 @@ const GARAGE_STORE = {
       id: 'no-paint',
       name: 'No Paint',
       cost: 0,
-      image: logo,
+      image: defaultAsset,
       effects: {},
       isStock: true
     },
@@ -126,21 +133,21 @@ const GARAGE_STORE = {
       id: 'colour-racing-red',
       name: 'Racing Red',
       cost: 20,
-      image: logo,
+      image: racingRed,
       effects: { Acceleration: 4, 'Top Speed': 6 }
     },
     {
       id: 'colour-midnight-blue',
       name: 'Midnight Blue',
       cost: 20,
-      image: logo,
+      image: midnightBlue,
       effects: { Handling: 3, Braking: 5 }
     },
     {
       id: 'colour-graphite-black',
       name: 'Graphite Black',
       cost: 20,
-      image: logo,
+      image: graphiteBlack,
       effects: { Braking: 15 }
     }
   ]
