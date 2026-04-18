@@ -234,6 +234,14 @@ const TheGarage = () => {
 
   const formatEffect = (value) => (value >= 0 ? `+${value}` : `${value}`)
 
+  const getNetEffectDelta = (sectionName, item, key) => {
+    const equippedItemId = equippedItems[sectionName]
+    const equippedItem = itemLookup[equippedItemId]
+    const incoming = Number(item.effects?.[key] || 0)
+    const currentlyApplied = Number(equippedItem?.effects?.[key] || 0)
+    return incoming - currentlyApplied
+  }
+
   const handleEquip = (sectionName, item) => {
     if (!ownedSet.has(item.id)) {
       setStatusMessage(`Purchase ${item.name} before equipping it.`)
@@ -315,10 +323,6 @@ const TheGarage = () => {
         <h1>The Garage</h1>
         <p className="garage-subtitle">Spend your tokens to upgrade your car setup.</p>
 
-        <div className="garage-balance">
-          <strong>Available Tokens:</strong> {tokenBalance}
-        </div>
-
         {statusMessage && (
           <p className="garage-status" role="status">{statusMessage}</p>
         )}
@@ -347,7 +351,7 @@ const TheGarage = () => {
                         <p>{isOwned ? 'Owned' : `Cost: ${item.cost} tokens`}</p>
                         <ul className="garage-item-effects">
                           {STAT_KEYS.map((key) => {
-                            const delta = Number(item.effects?.[key] || 0)
+                            const delta = getNetEffectDelta(sectionName, item, key)
                             if (delta === 0) return null
 
                             return (
@@ -393,36 +397,42 @@ const TheGarage = () => {
             </section>
           </div>
 
-          <aside className="garage-vehicle-column">
-            <h2>Current Vehicle</h2>
-            <div className="garage-vehicle-preview">
-              <img src={logo} alt={currentVehicleName} className="garage-vehicle-image" />
-            </div>
-            <p className="garage-vehicle-name">{currentVehicleName}</p>
-
-            <section className="garage-stats-panel" aria-label="Performance stats chart">
-              <h3>Performance Stats</h3>
-              <div className="garage-stats-chart">
-                {STAT_KEYS.map((key) => {
-                  const value = currentStats[key]
-                  return (
-                    <div key={key} className="garage-stat-row">
-                      <span className="garage-stat-label">{key}</span>
-                      <div className="garage-stat-track">
-                        <div
-                          className={`garage-stat-fill ${value >= 100 ? 'is-max' : ''}`}
-                          style={{ width: `${value}%` }}
-                          role="img"
-                          aria-label={`${key} ${value} out of 100`}
-                        />
-                      </div>
-                      <span className="garage-stat-value">{value}</span>
-                    </div>
-                  )
-                })}
+          <div className="garage-sidebar-column">
+            <aside className="garage-vehicle-column">
+              <h2>Current Vehicle</h2>
+              <div className="garage-vehicle-preview">
+                <img src={logo} alt={currentVehicleName} className="garage-vehicle-image" />
               </div>
-            </section>
-          </aside>
+              <p className="garage-vehicle-name">{currentVehicleName}</p>
+
+              <section className="garage-stats-panel" aria-label="Performance stats chart">
+                <h3>Performance Stats</h3>
+                <div className="garage-stats-chart">
+                  {STAT_KEYS.map((key) => {
+                    const value = currentStats[key]
+                    return (
+                      <div key={key} className="garage-stat-row">
+                        <span className="garage-stat-label">{key}</span>
+                        <div className="garage-stat-track">
+                          <div
+                            className={`garage-stat-fill ${value >= 100 ? 'is-max' : ''}`}
+                            style={{ width: `${value}%` }}
+                            role="img"
+                            aria-label={`${key} ${value} out of 100`}
+                          />
+                        </div>
+                        <span className="garage-stat-value">{value}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            </aside>
+
+            <div className="garage-balance">
+              <strong>Available Tokens:</strong> {tokenBalance}
+            </div>
+          </div>
         </div>
       </div>
     </div>
