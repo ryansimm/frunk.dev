@@ -1,9 +1,24 @@
+.sections-fade {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+    margin-top: -90px;
+    padding: 130px 0 100px;
+    background: linear-gradient(
+        to bottom,
+        rgba(64, 61, 86, 0) 0%,
+        rgba(43, 42, 58, 0.72) 36%,
+        rgba(17, 24, 39, 0.98) 100%
+    );
+}
+
 .sections{
-    margin: 80px auto;
+    margin: 0 auto;
     width: 90%;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
 }
 .section img{
     width: 100%;
@@ -12,4 +27,61 @@
 }
 .section{
     flex-basis: 31%;
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.section:focus-visible {
+    outline: 2px solid #4f46e5;
+    outline-offset: 2px;
+}
+
+.section-hover-box {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    background: rgba(17, 24, 39, 0.94);
+    color: #f9fafb;
+    border-radius: 10px;
+    padding: 14px;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+}
+
+.section-hover-box h3 {
+    margin: 0 0 6px;
+    font-size: 1.1rem;
+}
+
+.section-hover-box p {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.45;
+}
+
+.section:hover .section-hover-box,
+.section:focus-within .section-hover-box,
+.section:focus-visible .section-hover-box {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+@media (max-width: 900px) {
+    .sections-fade {
+        margin-top: -70px;
+        padding: 105px 0 80px;
+    }
+
+    .sections {
+        flex-direction: column;
+        width: min(92%, 560px);
+    }
+
+    .section {
+        width: 100%;
+    }
 }

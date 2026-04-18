@@ -193,6 +193,27 @@
   background: #fef2f2;
 }
 
+.challenge-output {
+  margin-top: 14px;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.challenge-output h4 {
+  margin: 0 0 8px;
+  color: #92400e;
+}
+
+.challenge-output p {
+  margin: 0;
+  white-space: pre-line;
+  color: #78350f;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+}
+
 .challenge-feedback {
   margin-top: 14px;
   border: 1px solid #bfdbfe;

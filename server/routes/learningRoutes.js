@@ -1,6 +1,13 @@
 import express from 'express';
+import {
+    PROMPT_INJECTION_GUARDRAIL,
+    asUntrustedInputBlock,
+    sanitisePromptValue,
+    sanitiseStringList,
+    toSafeEnum
+} from '../utils/promptSafety.js';
 
-export function createLearningRoutes({ db, generateTextWithModel, generateJsonWithFallback, jsonModels, getFallbackMcqQuestion, getFallbackKnowledgeQuestion, getFallbackAdaptiveQuestion, parseOptionalUserId }) {
+export function createLearningRoutes({ db, generateTextWithModel, generateTextWithFallback, generateJsonWithFallback, jsonModels, getFallbackMcqQuestion, getFallbackKnowledgeQuestion, getFallbackAdaptiveQuestion, parseOptionalUserId }) {
     const router = express.Router();
 
     const stripMarkdown = (text = '') => String(text)
@@ -176,7 +183,27 @@ export function createLearningRoutes({ db, generateTextWithModel, generateJsonWi
     router.post('/feedback', async (req, res) => {
         const { userAnswer, correctAnswer, questionText, userId, questionType } = req.body;
 
-        if (!userAnswer || !questionText) {
+        const safeQuestionType = toSafeEnum(questionType, ['knowledge', 'freecode', 'mcq'], 'mcq');
+        const safeUserAnswer = sanitisePromptValue(userAnswer, {
+            fallback: '',
+            maxChars: 3500,
+            trim: true,
+            collapseWhitespace: false
+        });
+        const safeQuestionText = sanitisePromptValue(questionText, {
+            fallback: '',
+            maxChars: 600,
+            trim: true,
+            collapseWhitespace: false
+        });
+        const safeCorrectAnswer = sanitisePromptValue(correctAnswer, {
+            fallback: '',
+            maxChars: 1200,
+            trim: true,
+            collapseWhitespace: false
+        });
+
+        if (!safeUserAnswer || !safeQuestionText) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
@@ -185,18 +212,28 @@ export function createLearningRoutes({ db, generateTextWithModel, generateJsonWi
         try {
             let prompt;
 
-            if (questionType === 'knowledge') {
-                const parsedKeywords = parseKeywordList(correctAnswer);
-                const answerLower = String(userAnswer || '').toLowerCase();
+            if (safeQuestionType === 'knowledge') {
+                const parsedKeywords = parseKeywordList(safeCorrectAnswer)
+                    .slice(0, 10)
+                    .map((item) => sanitisePromptValue(item, {
+                        fallback: '',
+                        maxChars: 40,
+                        trim: true,
+                        collapseWhitespace: true
+                    }))
+                    .filter(Boolean);
+                const answerLower = safeUserAnswer.toLowerCase();
                 const matchedKeywords = parsedKeywords.filter((keyword) => answerLower.includes(keyword.toLowerCase()));
                 const missingKeywords = parsedKeywords.filter((keyword) => !answerLower.includes(keyword.toLowerCase()));
-                const answerExcerpt = getAnswerExcerpt(userAnswer, 140);
+                const answerExcerpt = getAnswerExcerpt(safeUserAnswer, 140);
 
-                prompt = `You are a supportive tutor grading a student's response to a conceptual/knowledge-based question about Python programming.
+                prompt = `${PROMPT_INJECTION_GUARDRAIL}
 
-Question: ${questionText}
+You are a supportive tutor grading a student's response to a conceptual/knowledge-based question about Python programming.
 
-Student Answer: ${userAnswer}
+${asUntrustedInputBlock('Question', safeQuestionText, { maxChars: 600 })}
+
+${asUntrustedInputBlock('Student Answer', safeUserAnswer, { maxChars: 3500 })}
 
 Expected key concepts: ${parsedKeywords.length > 0 ? parsedKeywords.join(', ') : 'Not provided'}
 Matched concepts in student answer: ${matchedKeywords.length > 0 ? matchedKeywords.join(', ') : 'None detected'}
@@ -214,40 +251,57 @@ Feedback requirements:
 - Include exactly 2 strengths and 2 targeted improvements.
 - Suggest one concrete next practice action tied to missing concepts.
 - Keep total length under 120 words and avoid generic praise.`;
-            } else if (questionType === 'freeCode') {
-                prompt = `You are a supportive tutor providing constructive feedback on a coding solution. Focus on the logic and correctness of the code. Be encouraging but honest. Point out what they did well and where they can improve. Most specifically, do not provide students with quick fixes with generative code, but instead guide them to find the solution themselves. Always provide actionable advice for improvement.
+            } else if (safeQuestionType === 'freecode') {
+                prompt = `${PROMPT_INJECTION_GUARDRAIL}
 
-Question: ${questionText}
+You are a supportive tutor providing constructive feedback on a coding solution. Focus on the logic and correctness of the code. Be encouraging but honest. Point out what they did well and where they can improve. Most specifically, do not provide students with quick fixes with generative code, but instead guide them to find the solution themselves. Always provide actionable advice for improvement.
 
-Student Code: ${userAnswer}
+${asUntrustedInputBlock('Question', safeQuestionText, { maxChars: 600 })}
 
-Correct/Expected Code: ${correctAnswer || 'Not provided'}
+${asUntrustedInputBlock('Student Code', safeUserAnswer, { maxChars: 3500 })}
+
+${asUntrustedInputBlock('Correct or Expected Code', safeCorrectAnswer || 'Not provided', { maxChars: 1200 })}
 
 Provide specific, constructive feedback on their code.`;
             } else {
                 // MCQ default
-                prompt = `You are a supportive tutor providing constructive feedback. The student selected an answer to a multiple choice question.
+                prompt = `${PROMPT_INJECTION_GUARDRAIL}
 
-Question: ${questionText}
+You are a supportive tutor providing constructive feedback. The student selected an answer to a multiple choice question.
 
-Student Answer: ${userAnswer}
+${asUntrustedInputBlock('Question', safeQuestionText, { maxChars: 600 })}
 
-Correct Answer: ${correctAnswer}
+${asUntrustedInputBlock('Student Answer', safeUserAnswer, { maxChars: 3500 })}
+
+${asUntrustedInputBlock('Correct Answer', safeCorrectAnswer || 'Not provided', { maxChars: 1200 })}
 
 Provide specific, constructive feedback explaining why their answer was correct or incorrect, and what they should study to improve.`;
             }
 
             let feedback = '';
             let usedFallback = false;
-            let modelUsed = 'gemini-2.0-flash';
+            let modelUsed = 'gemini-2.5-flash';
+            let modelErrorMessage = null;
 
             try {
-                feedback = await generateTextWithModel(prompt, modelUsed);
+                if (typeof generateTextWithFallback === 'function') {
+                    const generated = await generateTextWithFallback(prompt);
+                    feedback = generated.text;
+                    modelUsed = generated.modelName;
+                } else {
+                    feedback = await generateTextWithModel(prompt, modelUsed);
+                }
             } catch (modelError) {
                 usedFallback = true;
                 modelUsed = 'local-fallback';
+                modelErrorMessage = modelError?.message || 'Unknown model error';
                 console.warn('Feedback model failed, using fallback feedback:', modelError.message);
-                feedback = buildFallbackFeedback({ questionType, userAnswer, correctAnswer, questionText });
+                feedback = buildFallbackFeedback({
+                    questionType: safeQuestionType,
+                    userAnswer: safeUserAnswer,
+                    correctAnswer: safeCorrectAnswer,
+                    questionText: safeQuestionText
+                });
             }
 
             const responseTime = Date.now() - startTime;
@@ -255,12 +309,13 @@ Provide specific, constructive feedback explaining why their answer was correct 
             try {
                 await db.collection('feedback_logs').insertOne({
                     userId: userId || 'anonymous',
-                    questionType: questionType || 'mcq',
-                    questionText,
-                    userAnswer,
-                    correctAnswer,
+                    questionType: safeQuestionType,
+                    questionText: safeQuestionText,
+                    userAnswer: safeUserAnswer,
+                    correctAnswer: safeCorrectAnswer,
                     feedback,
                     model: modelUsed,
+                    modelError: modelErrorMessage,
                     fallback: usedFallback,
                     responseTime,
                     timestamp: new Date()
@@ -272,7 +327,12 @@ Provide specific, constructive feedback explaining why their answer was correct 
             res.json({ feedback, responseTime, fallback: usedFallback });
         } catch (error) {
             console.error('Feedback error:', error);
-            const fallbackFeedback = buildFallbackFeedback({ questionType, userAnswer, correctAnswer, questionText });
+            const fallbackFeedback = buildFallbackFeedback({
+                questionType: safeQuestionType,
+                userAnswer: safeUserAnswer,
+                correctAnswer: safeCorrectAnswer,
+                questionText: safeQuestionText
+            });
             res.json({
                 feedback: fallbackFeedback,
                 responseTime: Date.now() - startTime,
@@ -344,11 +404,24 @@ Provide specific, constructive feedback explaining why their answer was correct 
     router.post('/generate-question', async (req, res) => {
         const { topic, difficulty, userId, questionType = 'mcq', askedTopics = [] } = req.body;
 
-        if (!topic || !difficulty) {
+        const safeTopic = sanitisePromptValue(topic, {
+            fallback: '',
+            maxChars: 80,
+            trim: true,
+            collapseWhitespace: true
+        });
+        const safeDifficulty = toSafeEnum(difficulty, ['easy', 'medium', 'hard'], 'medium');
+        const safeQuestionType = toSafeEnum(questionType, ['freecode', 'knowledge', 'mcq'], 'mcq');
+        const safeAskedTopics = sanitiseStringList(askedTopics, {
+            maxItems: 12,
+            maxItemChars: 60
+        });
+
+        if (!safeTopic) {
             return res.status(400).json({ error: 'Missing topic or difficulty' });
         }
 
-        console.log(`\n📌 [CHALLENGE QUESTION] Generating ${questionType} (${difficulty}) on topic: "${topic}"`);
+        console.log(`\n📌 [CHALLENGE QUESTION] Generating ${safeQuestionType} (${safeDifficulty}) on topic: "${safeTopic}"`);
         const startTime = Date.now();
         let usedFallback = false;
 
@@ -357,15 +430,17 @@ Provide specific, constructive feedback explaining why their answer was correct 
             let questionData;
 
             // Build exclusion clause if there are previously asked topics
-            const avoidClause = askedTopics.length > 0
-                ? `\n\nIMPORTANT: These topics have already been covered in their aptitude test, so create something DIFFERENT: ${askedTopics.join(', ')}. Make sure this new question covers a fresh angle or concept.`
+            const avoidClause = safeAskedTopics.length > 0
+                ? `\n\nIMPORTANT: These topics have already been covered in their aptitude test, so create something DIFFERENT: ${safeAskedTopics.join(', ')}. Make sure this new question covers a fresh angle or concept.`
                 : '';
 
-            if (questionType === 'freeCode') {
+            if (safeQuestionType === 'freecode') {
                 // Generate free-code question with code template, hints, and test cases
-                                prompt = `You are a Python question generator. Create a concise coding challenge. Always respond with valid JSON only, no additional text.
+                                prompt = `${PROMPT_INJECTION_GUARDRAIL}
 
-Generate a ${difficulty} difficulty free-response coding question about "${topic}".${avoidClause}
+You are a Python question generator. Create a concise coding challenge. Always respond with valid JSON only, no additional text.
+
+Generate a ${safeDifficulty} difficulty free-response coding question about "${safeTopic}".${avoidClause}
 
 Keep the output brief and clear:
 - "question": maximum 2 short sentences, under 180 characters total.
@@ -384,7 +459,7 @@ Return ONLY valid JSON in this exact format:
   "explanation": "Explanation of the solution approach"
 }`;
 
-                console.log('📝 Attempting to generate freeCode question via AI...', { topic, difficulty });
+                console.log('📝 Attempting to generate freeCode question via AI...', { topic: safeTopic, difficulty: safeDifficulty });
                 const { json: generatedData, modelName: model } = await generateJsonWithFallback(prompt, jsonModels);
                 console.log('✅ Successfully generated freeCode question', { model });
                 const normalisedData = normaliseFreeCodeQuestion(generatedData);
@@ -393,11 +468,13 @@ Return ONLY valid JSON in this exact format:
                     questionType: 'freeCode',
                     model
                 };
-            } else if (questionType === 'knowledge') {
+            } else if (safeQuestionType === 'knowledge') {
                 // Generate knowledge-based question
-                                prompt = `You are a Python instructor creating conceptual questions to test deep understanding (not syntax). Always respond with valid JSON only, no additional text.
+                                prompt = `${PROMPT_INJECTION_GUARDRAIL}
 
-Generate a ${difficulty} difficulty knowledge-based question about "${topic}". Ask the student to explain concepts, compare ideas, or analyse usage patterns.${avoidClause}
+You are a Python instructor creating conceptual questions to test deep understanding (not syntax). Always respond with valid JSON only, no additional text.
+
+Generate a ${safeDifficulty} difficulty knowledge-based question about "${safeTopic}". Ask the student to explain concepts, compare ideas, or analyse usage patterns.${avoidClause}
 
 Keep output concise:
 - "question": max 180 characters, 1-2 short sentences.
@@ -411,7 +488,7 @@ Return ONLY valid JSON in this exact format:
   "explanation": "What a good answer should include"
 }`;
 
-                console.log('📝 Attempting to generate knowledge question via AI...', { topic, difficulty });
+                console.log('📝 Attempting to generate knowledge question via AI...', { topic: safeTopic, difficulty: safeDifficulty });
                 const { json: generatedData, modelName: model } = await generateJsonWithFallback(prompt, jsonModels);
                 console.log('✅ Successfully generated knowledge question', { model });
                 const normalisedData = normaliseKnowledgeQuestion(generatedData);
@@ -422,9 +499,11 @@ Return ONLY valid JSON in this exact format:
                 };
             } else {
                 // MCQ (default)
-                prompt = `You are a question generator. Create educational questions with multiple choice options. Always respond with valid JSON only, no additional text.
+                prompt = `${PROMPT_INJECTION_GUARDRAIL}
 
-Generate a ${difficulty} difficulty multiple-choice question about "${topic}".${avoidClause}
+You are a question generator. Create educational questions with multiple choice options. Always respond with valid JSON only, no additional text.
+
+Generate a ${safeDifficulty} difficulty multiple-choice question about "${safeTopic}".${avoidClause}
 
 Keep output concise:
 - "question": max 170 characters.
@@ -439,7 +518,7 @@ Return ONLY valid JSON in this exact format:
   "explanation": "Why this is the correct answer"
 }`;
 
-                console.log('📝 Attempting to generate MCQ via AI...', { topic, difficulty });
+                console.log('📝 Attempting to generate MCQ via AI...', { topic: safeTopic, difficulty: safeDifficulty });
                 const { json: generatedData, modelName: model } = await generateJsonWithFallback(prompt, jsonModels);
                 console.log('✅ Successfully generated MCQ', { model, responseTime: `${Date.now() - startTime}ms` });
                 const normalisedData = normaliseMcqQuestion(generatedData);
@@ -454,9 +533,9 @@ Return ONLY valid JSON in this exact format:
 
             const dbEntry = {
                 userId: userId || 'anonymous',
-                topic,
-                difficulty,
-                questionType,
+                topic: safeTopic,
+                difficulty: safeDifficulty,
+                questionType: safeQuestionType,
                 ...questionData,
                 createdAt: new Date(),
                 responseTime,
@@ -465,7 +544,7 @@ Return ONLY valid JSON in this exact format:
 
             const insertResult = await db.collection('questions').insertOne(dbEntry);
 
-            console.log('✨ Successfully generated AI question:', { topic, questionType, usedFallback: false, responseTime, model: questionData.model });
+            console.log('✨ Successfully generated AI question:', { topic: safeTopic, questionType: safeQuestionType, usedFallback: false, responseTime, model: questionData.model });
 
             res.json({
                 ...questionData,
@@ -477,26 +556,26 @@ Return ONLY valid JSON in this exact format:
             console.error('❌ Question generation error:', {
                 message: error.message,
                 stack: error.stack,
-                topic,
-                difficulty,
-                questionType
+                topic: safeTopic,
+                difficulty: safeDifficulty,
+                questionType: safeQuestionType
             });
 
             // Fallback based on question type
             let fallbackQuestion;
-            if (req.body.questionType === 'freeCode') {
-                fallbackQuestion = getFallbackAdaptiveQuestion(difficulty, 1);
+            if (safeQuestionType === 'freecode') {
+                fallbackQuestion = getFallbackAdaptiveQuestion(safeDifficulty, 1);
                 fallbackQuestion.questionType = 'freeCode';
-            } else if (req.body.questionType === 'knowledge') {
-                fallbackQuestion = getFallbackKnowledgeQuestion(topic, difficulty);
+            } else if (safeQuestionType === 'knowledge') {
+                fallbackQuestion = getFallbackKnowledgeQuestion(safeTopic, safeDifficulty);
                 fallbackQuestion.questionType = 'knowledge';
             } else {
-                fallbackQuestion = getFallbackMcqQuestion(topic, difficulty);
+                fallbackQuestion = getFallbackMcqQuestion(safeTopic, safeDifficulty);
                 fallbackQuestion.questionType = 'mcq';
             }
 
             usedFallback = true;
-            console.log('📦 Using fallback question for topic:', topic, 'type:', req.body.questionType, 'error:', error.message);
+            console.log('📦 Using fallback question for topic:', safeTopic, 'type:', safeQuestionType, 'error:', error.message);
 
             res.json({
                 ...fallbackQuestion,

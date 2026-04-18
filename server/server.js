@@ -4,7 +4,7 @@ import cors from 'cors';
 import express from 'express';
 
 import { connectToDB, getDb } from './db/mongo.js';
-import { JSON_RESPONSE_MODELS, generateJsonWithFallback, generateTextWithModel } from './services/aiService.js';
+import { JSON_RESPONSE_MODELS, generateJsonWithFallback, generateTextWithFallback, generateTextWithModel } from './services/aiService.js';
 import { getFallbackAdaptiveQuestion, getFallbackMcqQuestion, getFallbackKnowledgeQuestion, resolveNextDifficulty } from './services/questionService.js';
 import { calculateTokenAward, getFallbackEvaluation, normaliseEvaluationResult } from './services/evaluationService.js';
 import { isValidObjectId, parseOptionalUserId, toObjectId } from './utils/userUtils.js';
@@ -31,6 +31,7 @@ async function startServer() {
         app.use('/api', createLearningRoutes({
             db,
             generateTextWithModel,
+            generateTextWithFallback,
             generateJsonWithFallback,
             jsonModels: JSON_RESPONSE_MODELS,
             getFallbackMcqQuestion,

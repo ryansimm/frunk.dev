@@ -1,6 +1,35 @@
 /* global process */
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+function uniqueModels(models = []) {
+    const seen = new Set();
+    const ordered = [];
+
+    for (const model of models) {
+        const value = String(model || '').trim().replace(/^models\//, '');
+        if (!value || seen.has(value)) {
+            continue;
+        }
+
+        seen.add(value);
+        ordered.push(value);
+    }
+
+    return ordered;
+}
+
+function buildPreferredModelList() {
+    const configured = (process.env.GEMINI_MODEL || '').replace(/^models\//, '');
+
+    return uniqueModels([
+        'gemini-2.5-flash',
+        configured,
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-001',
+        'gemini-flash-latest'
+    ]);
+}
+
 function getGenAIClient() {
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
@@ -10,13 +39,9 @@ function getGenAIClient() {
     return new GoogleGenerativeAI(apiKey);
 }
 
-export const JSON_RESPONSE_MODELS = [
-    (process.env.GEMINI_MODEL || '').replace(/^models\//, ''),
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-001',
-    'gemini-flash-latest'
-].filter(Boolean);
+export const JSON_RESPONSE_MODELS = buildPreferredModelList();
+
+export const TEXT_RESPONSE_MODELS = buildPreferredModelList();
 
 function extractJsonFromModelResponse(rawText) {
     const content = (rawText || '').replace(/```json\n?|\n?```/g, '').trim();
@@ -60,9 +85,37 @@ export async function generateJsonWithFallback(prompt, modelNames = JSON_RESPONS
     throw lastError || new Error('No AI model available');
 }
 
-export async function generateTextWithModel(prompt, modelName = 'gemini-2.0-flash') {
+export async function generateTextWithModel(prompt, modelName = 'gemini-2.5-flash') {
     const genAI = getGenAIClient();
     const model = genAI.getGenerativeModel({ model: modelName });
     const result = await model.generateContent(prompt);
     return result.response.text();
+}
+
+export async function generateTextWithFallback(prompt, modelNames = TEXT_RESPONSE_MODELS) {
+    let lastError;
+    console.log(`🤖 Trying ${modelNames.length} models for text generation:`, modelNames);
+
+    for (const modelName of modelNames) {
+        try {
+            console.log(`  ↳ Attempting text model: ${modelName}...`);
+            const genAI = getGenAIClient();
+            const model = genAI.getGenerativeModel({ model: modelName });
+            const result = await model.generateContent(prompt);
+            const text = result.response.text();
+
+            if (!String(text || '').trim()) {
+                throw new Error('Model returned empty text response');
+            }
+
+            console.log(`  ✅ Text generation success with ${modelName}`);
+            return { text, modelName };
+        } catch (error) {
+            lastError = error;
+            console.warn(`  ❌ Text model ${modelName} failed:`, error.message);
+        }
+    }
+
+    console.error('🚨 All text models failed. Last error:', lastError?.message);
+    throw lastError || new Error('No text AI model available');
 }

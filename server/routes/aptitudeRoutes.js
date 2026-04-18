@@ -1,4 +1,13 @@
 import express from 'express';
+import {
+    PROMPT_INJECTION_GUARDRAIL,
+    asUntrustedInputBlock,
+    safeJsonSnippet,
+    sanitisePromptValue,
+    sanitiseStringList,
+    sanitiseTestCases,
+    toSafeEnum
+} from '../utils/promptSafety.js';
 
 export function createAptitudeRoutes({
     db,
@@ -72,11 +81,28 @@ export function createAptitudeRoutes({
     router.post('/generate-adaptive-question', async (req, res) => {
         const { questionNumber, lastAnswerCorrect, currentDifficulty, userId, askedTopics = [] } = req.body;
 
-        const startTime = Date.now();
-        const nextDifficulty = resolveNextDifficulty(questionNumber, lastAnswerCorrect, currentDifficulty);
+        const parsedQuestionNumber = Number.parseInt(questionNumber, 10);
+        const safeQuestionNumber = Number.isFinite(parsedQuestionNumber)
+            ? Math.max(1, Math.min(12, parsedQuestionNumber))
+            : 1;
+        const safeCurrentDifficulty = toSafeEnum(currentDifficulty, ['easy', 'medium', 'hard'], 'medium');
+        const safeLastAnswerCorrect = Boolean(lastAnswerCorrect);
+        const safeAskedTopics = sanitiseStringList(askedTopics, {
+            maxItems: 12,
+            maxItemChars: 60
+        });
+        const safeUserId = sanitisePromptValue(userId, {
+            fallback: 'anonymous',
+            maxChars: 64,
+            trim: true,
+            collapseWhitespace: true
+        });
 
-        const avoidClause = askedTopics.length > 0
-            ? `\n\nIMPORTANT: Do NOT reuse or closely resemble any of these already-asked topics: ${askedTopics.join(', ')}. Pick a completely different concept.`
+        const startTime = Date.now();
+        const nextDifficulty = resolveNextDifficulty(safeQuestionNumber, safeLastAnswerCorrect, safeCurrentDifficulty);
+
+        const avoidClause = safeAskedTopics.length > 0
+            ? `\n\nIMPORTANT: Do NOT reuse or closely resemble any of these already-asked topics: ${safeAskedTopics.join(', ')}. Pick a completely different concept.`
             : '';
 
         try {
@@ -87,7 +113,7 @@ Difficulty guidelines:
 - MEDIUM: Functions with parameters, list operations, string manipulation, conditionals (intermediate level)
 - HARD: Algorithms, recursion, classes, complex data structures (advanced level)
 
-This is question #${questionNumber} of 12. Each question must cover a DIFFERENT Python concept or problem type. Vary the problem style — use different data structures, algorithms, and problem domains each time.${avoidClause}
+This is question #${safeQuestionNumber} of 12. Each question must cover a DIFFERENT Python concept or problem type. Vary the problem style — use different data structures, algorithms, and problem domains each time.${avoidClause}
 
 Keep output concise:
 - "question": max 180 characters and include one short example.
@@ -112,8 +138,8 @@ Return ONLY valid JSON in this exact format:
             const safeQuestion = normaliseAdaptiveQuestion(questionData, nextDifficulty);
 
             const dbEntry = {
-                userId: userId || 'anonymous',
-                questionNumber,
+                userId: safeUserId || 'anonymous',
+                questionNumber: safeQuestionNumber,
                 ...safeQuestion,
                 model: modelName,
                 createdAt: new Date(),
@@ -125,12 +151,12 @@ Return ONLY valid JSON in this exact format:
             res.json({
                 ...safeQuestion,
                 id: insertResult.insertedId,
-                questionNumber,
+                questionNumber: safeQuestionNumber,
                 responseTime
             });
         } catch (error) {
             console.error('Adaptive question error:', error);
-            const fallbackQuestion = getFallbackAdaptiveQuestion(nextDifficulty || currentDifficulty || 'medium', questionNumber);
+            const fallbackQuestion = getFallbackAdaptiveQuestion(nextDifficulty || safeCurrentDifficulty || 'medium', safeQuestionNumber);
             res.json({
                 ...fallbackQuestion,
                 responseTime: Date.now() - startTime,
@@ -143,18 +169,52 @@ Return ONLY valid JSON in this exact format:
         const { userCode, question, difficulty, testCases, userId, codeTemplate } = req.body;
         const startTime = Date.now();
 
+        const safeDifficulty = toSafeEnum(difficulty, ['easy', 'medium', 'hard'], 'medium');
+        const safeQuestion = sanitisePromptValue(question, {
+            fallback: 'No question provided.',
+            maxChars: 600,
+            trim: true,
+            collapseWhitespace: false
+        });
+        const safeUserCode = sanitisePromptValue(userCode, {
+            fallback: '',
+            maxChars: 9000,
+            trim: true,
+            collapseWhitespace: false
+        });
+        const safeCodeTemplate = sanitisePromptValue(codeTemplate, {
+            fallback: '',
+            maxChars: 2000,
+            trim: true,
+            collapseWhitespace: false
+        });
+        const safeTestCaseData = sanitiseTestCases(testCases, {
+            maxCases: 6,
+            maxFieldChars: 180
+        });
+        const safeUserId = sanitisePromptValue(userId, {
+            fallback: 'anonymous',
+            maxChars: 64,
+            trim: true,
+            collapseWhitespace: true
+        });
+
+        if (!safeUserCode) {
+            return res.status(400).json({ error: 'Missing userCode' });
+        }
+
         try {
-            const prompt = `You are evaluating a Python coding submission for an aptitude test.
+            const prompt = `${PROMPT_INJECTION_GUARDRAIL}
 
-Difficulty Level: ${difficulty}
-Question: ${question}
+You are evaluating a Python coding submission for an aptitude test.
 
-Student's Code:
-\`\`\`python
-${userCode}
-\`\`\`
+Difficulty Level: ${safeDifficulty}
 
-Test Cases: ${JSON.stringify(testCases)}
+${asUntrustedInputBlock('Question', safeQuestion, { maxChars: 600 })}
+
+${asUntrustedInputBlock('Student Code', safeUserCode, { maxChars: 9000 })}
+
+Test Cases (untrusted user input): ${safeJsonSnippet(safeTestCaseData, { maxChars: 1800, fallback: '[]' })}
 
 Evaluate the code and respond with ONLY valid JSON:
 {
@@ -186,17 +246,17 @@ Rules:
 - Be strict and conservative with scoring.`;
 
             const { json: rawEvaluationData } = await generateJsonWithFallback(prompt, jsonModels);
-            const evaluationData = normaliseEvaluationResult(rawEvaluationData, userCode, codeTemplate, difficulty);
+            const evaluationData = normaliseEvaluationResult(rawEvaluationData, safeUserCode, safeCodeTemplate, safeDifficulty);
             const { tokenAward, tokenBreakdown } = calculateTokenAward({
                 evaluationData,
-                difficulty,
-                userCode
+                difficulty: safeDifficulty,
+                userCode: safeUserCode
             });
 
             const responseTime = Date.now() - startTime;
             let tokenBalance = null;
 
-            const parsedUserId = parseOptionalUserId(userId);
+            const parsedUserId = parseOptionalUserId(safeUserId);
             if (parsedUserId) {
                 const userUpdate = await db.collection('users').findOneAndUpdate(
                     { _id: parsedUserId },
@@ -213,10 +273,10 @@ Rules:
             }
 
             await db.collection('aptitude_submissions').insertOne({
-                userId: userId || 'anonymous',
-                question,
-                difficulty,
-                userCode,
+                userId: safeUserId || 'anonymous',
+                question: safeQuestion,
+                difficulty: safeDifficulty,
+                userCode: safeUserCode,
                 evaluation: evaluationData,
                 tokenAward,
                 tokenBreakdown,
@@ -233,15 +293,15 @@ Rules:
             });
         } catch (error) {
             console.error('Code evaluation error:', error);
-            const fallbackEvaluation = getFallbackEvaluation(userCode, codeTemplate, difficulty);
+            const fallbackEvaluation = getFallbackEvaluation(safeUserCode, safeCodeTemplate, safeDifficulty);
             const { tokenAward, tokenBreakdown } = calculateTokenAward({
                 evaluationData: fallbackEvaluation,
-                difficulty,
-                userCode
+                difficulty: safeDifficulty,
+                userCode: safeUserCode
             });
             let tokenBalance = null;
 
-            const parsedUserId = parseOptionalUserId(userId);
+            const parsedUserId = parseOptionalUserId(safeUserId);
             if (parsedUserId) {
                 const userUpdate = await db.collection('users').findOneAndUpdate(
                     { _id: parsedUserId },
