@@ -1,6 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import './TheGarage.css'
 import logo from '../../assets/logo.png'
+import carbonwheel from '../../assets/CarbonWheels.png'
+import classicwheel from '../../assets/ClassicWheels.png'
+import flame from '../../assets/FlameDecal.png'
+import lightning from '../../assets/LightningDecal.png'
+import stripe from '../../assets/RacingStripes.png'
+import rallywheel from '../../assets/RallyWheels.png'
+import stockwheel from '../../assets/StockWheels.png'
+import defaultAsset from '../../assets/Default.png'
+import basicWing from '../../assets/BasicWing.png'
+import trackWing from '../../assets/TrackWing.png'
+import aeroWing from '../../assets/AeroWing.png'
+import racingRed from '../../assets/RacingRed.png'
+import midnightBlue from '../../assets/MidnightBlue.png'
+import graphiteBlack from '../../assets/GraphiteBlack.png'
+
+import { apiService } from '../../services/api'
 
 const STAT_KEYS = ['Acceleration', 'Handling', 'Braking', 'Top Speed']
 const BASE_STATS = {
@@ -13,96 +29,142 @@ const BASE_STATS = {
 const GARAGE_STORE = {
   Wheels: [
     {
+      id: 'wheels-stock',
+      name: 'Stock Wheels',
+      cost: 0,
+      image: stockwheel,
+      effects: {},
+      isStock: true
+    },
+    {
       id: 'wheels-classic',
       name: 'Classic Wheels',
-      cost: 15,
-      image: logo,
-      effects: { Acceleration: 4, Handling: 2 }
+      cost: 10,
+      image: classicwheel,
+      effects: { Acceleration: 10, Handling: 5 }
     },
     {
       id: 'wheels-rally',
       name: 'Rally Wheels',
-      cost: 25,
-      image: logo,
-      effects: { Handling: 6, Braking: 3, 'Top Speed': -1 }
+      cost: 30,
+      image: rallywheel,
+      effects: { Handling: 15, Braking: 10, 'Top Speed': -2 }
     },
     {
       id: 'wheels-carbon',
       name: 'Carbon Wheels',
-      cost: 35,
-      image: logo,
-      effects: { Acceleration: 5, 'Top Speed': 7, Braking: -1 }
+      cost: 50,
+      image: carbonwheel,
+      effects: { Acceleration: 25, 'Top Speed': 17, Braking: -3 }
     }
   ],
   Wings: [
     {
+      id: 'no-wing',
+      name: 'No Wing',
+      cost: 0,
+      image: defaultAsset,
+      effects: {},
+      isStock: true
+    },
+    {
       id: 'wing-basic',
       name: 'Basic Wing',
-      cost: 20,
-      image: logo,
-      effects: { Handling: 4, Braking: 1 }
+      cost: 25,
+      image: basicWing,
+      effects: { Handling: 10, Braking: 3 }
     },
     {
       id: 'wing-track',
       name: 'Track Wing',
-      cost: 30,
-      image: logo,
-      effects: { Handling: 7, Braking: 2, 'Top Speed': -2 }
+      cost: 40,
+      image: trackWing,
+      effects: { Handling: 20, Braking: 10, 'Top Speed': -2 }
     },
     {
       id: 'wing-aero',
       name: 'Aero Wing',
-      cost: 45,
-      image: logo,
-      effects: { 'Top Speed': 8, Handling: 2, Braking: -2 }
+      cost: 55,
+      image: aeroWing,
+      effects: { 'Top Speed': 18, Handling: 30, Braking: -2 }
     }
   ],
   Decal: [
     {
+      id: 'no-decal',
+      name: 'No Decal',
+      cost: 0,
+      image: defaultAsset,
+      effects: {},
+      isStock: true
+    },
+    {
       id: 'decal-stripes',
       name: 'Speed Stripes',
-      cost: 10,
-      image: logo,
-      effects: { Acceleration: 2 }
+      cost: 15,
+      image: stripe,
+      effects: { Acceleration: 2, Braking : 10 }
     },
     {
       id: 'decal-flames',
       name: 'Flame Pack',
-      cost: 18,
-      image: logo,
-      effects: { 'Top Speed': 2, Acceleration: 1 }
+      cost: 30,
+      image: flame,
+      effects: { 'Top Speed': 5, Acceleration: 5 }
     },
     {
       id: 'decal-lightning',
       name: 'Lightning Pack',
-      cost: 22,
-      image: logo,
-      effects: { Acceleration: 2, Handling: 1 }
+      cost: 45,
+      image: lightning,
+      effects: { Acceleration: 2, Handling: 1, Braking : 8}
     }
   ],
   Colour: [
     {
+      id: 'no-paint',
+      name: 'No Paint',
+      cost: 0,
+      image: defaultAsset,
+      effects: {},
+      isStock: true
+    },
+    {
       id: 'colour-racing-red',
       name: 'Racing Red',
-      cost: 12,
-      image: logo,
-      effects: { Acceleration: 1, 'Top Speed': 1 }
+      cost: 20,
+      image: racingRed,
+      effects: { Acceleration: 4, 'Top Speed': 6 }
     },
     {
       id: 'colour-midnight-blue',
       name: 'Midnight Blue',
-      cost: 12,
-      image: logo,
-      effects: { Handling: 1, Braking: 1 }
+      cost: 20,
+      image: midnightBlue,
+      effects: { Handling: 3, Braking: 5 }
     },
     {
       id: 'colour-graphite-black',
       name: 'Graphite Black',
-      cost: 12,
-      image: logo,
-      effects: { Braking: 2 }
+      cost: 20,
+      image: graphiteBlack,
+      effects: { Braking: 15 }
     }
   ]
+}
+
+const STOCK_SETUP = {
+  Wheels: 'wheels-stock',
+  Wings: 'no-wing',
+  Decal: 'no-decal',
+  Colour: 'no-paint'
+}
+
+const STOCK_ITEM_IDS = Object.values(STOCK_SETUP)
+const LEGACY_ITEM_IDS = {
+  'wing-stock': 'no-wing',
+  'colour-stock': 'no-paint',
+  'decal-stock': 'no-decal'
 }
 
 const PURCHASES_KEY = 'garagePurchases'
@@ -123,9 +185,12 @@ const readOwnedItems = () => {
   try {
     const raw = localStorage.getItem(PURCHASES_KEY)
     const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed : []
+    const purchasedItems = Array.isArray(parsed)
+      ? parsed.map((itemId) => LEGACY_ITEM_IDS[itemId] || itemId)
+      : []
+    return [...new Set([...STOCK_ITEM_IDS, ...purchasedItems])]
   } catch {
-    return []
+    return [...STOCK_ITEM_IDS]
   }
 }
 
@@ -133,7 +198,12 @@ const readEquippedItems = () => {
   try {
     const raw = localStorage.getItem(EQUIPPED_KEY)
     const parsed = raw ? JSON.parse(raw) : {}
-    return parsed && typeof parsed === 'object' ? parsed : {}
+    if (!parsed || typeof parsed !== 'object') return {}
+
+    return Object.entries(parsed).reduce((accumulator, [sectionName, itemId]) => {
+      accumulator[sectionName] = LEGACY_ITEM_IDS[itemId] || itemId
+      return accumulator
+    }, {})
   } catch {
     return {}
   }
@@ -156,6 +226,7 @@ const TheGarage = () => {
   const [equippedItems, setEquippedItems] = useState(readEquippedItems)
   const [statusMessage, setStatusMessage] = useState('')
   const [currentVehicleName] = useState(readCurrentVehicle)
+  const [pendingPurchaseId, setPendingPurchaseId] = useState('')
 
   const ownedSet = useMemo(() => new Set(ownedItems), [ownedItems])
   const itemLookup = useMemo(() => {
@@ -190,6 +261,14 @@ const TheGarage = () => {
 
   const formatEffect = (value) => (value >= 0 ? `+${value}` : `${value}`)
 
+  const getNetEffectDelta = (sectionName, item, key) => {
+    const equippedItemId = equippedItems[sectionName]
+    const equippedItem = itemLookup[equippedItemId]
+    const incoming = Number(item.effects?.[key] || 0)
+    const currentlyApplied = Number(equippedItem?.effects?.[key] || 0)
+    return incoming - currentlyApplied
+  }
+
   const handleEquip = (sectionName, item) => {
     if (!ownedSet.has(item.id)) {
       setStatusMessage(`Purchase ${item.name} before equipping it.`)
@@ -206,7 +285,7 @@ const TheGarage = () => {
     setStatusMessage(`Equipped ${item.name}.`)
   }
 
-  const handlePurchase = (sectionName, item) => {
+  const handlePurchase = async (sectionName, item) => {
     if (ownedSet.has(item.id)) {
       setStatusMessage(`${item.name} is already owned.`)
       return
@@ -217,31 +296,52 @@ const TheGarage = () => {
       return
     }
 
-    const updatedBalance = tokenBalance - item.cost
-    const nextOwnedItems = [...ownedItems, item.id]
+    setPendingPurchaseId(item.id)
 
-    setTokenBalance(updatedBalance)
-    setOwnedItems(nextOwnedItems)
-    setStatusMessage(`Purchased ${item.name} for ${item.cost} tokens.`)
+    try {
+      const spendResult = await apiService.spendTokens({
+        amount: item.cost,
+        reason: 'garage_purchase',
+        itemId: item.id,
+        itemName: item.name
+      })
 
-    localStorage.setItem(PURCHASES_KEY, JSON.stringify(nextOwnedItems))
+      const serverBalance = Number(spendResult?.tokenBalance)
+      const updatedBalance = Number.isFinite(serverBalance)
+        ? serverBalance
+        : tokenBalance - item.cost
 
-    const nextEquipped = {
-      ...equippedItems,
-      [sectionName]: item.id
+      const nextOwnedItems = [...ownedItems, item.id]
+
+      setTokenBalance(updatedBalance)
+      setOwnedItems(nextOwnedItems)
+      setStatusMessage(`Purchased ${item.name} for ${item.cost} tokens.`)
+
+      localStorage.setItem(PURCHASES_KEY, JSON.stringify(nextOwnedItems))
+
+      const nextEquipped = {
+        ...equippedItems,
+        [sectionName]: item.id
+      }
+      setEquippedItems(nextEquipped)
+      localStorage.setItem(EQUIPPED_KEY, JSON.stringify(nextEquipped))
+
+      const storedUser = JSON.parse(localStorage.getItem('user') || '{}')
+      localStorage.setItem('user', JSON.stringify({
+        ...storedUser,
+        tokenBalance: updatedBalance,
+        totalTokensEarned: Number(spendResult?.totalTokensEarned ?? storedUser.totalTokensEarned ?? 0),
+        totalTokensSpent: Number(spendResult?.totalTokensSpent ?? storedUser.totalTokensSpent ?? 0)
+      }))
+
+      window.dispatchEvent(new CustomEvent('tokenBalanceUpdated', {
+        detail: { tokenBalance: updatedBalance }
+      }))
+    } catch (purchaseError) {
+      setStatusMessage(purchaseError?.response?.data?.error || purchaseError?.message || `Unable to purchase ${item.name}.`)
+    } finally {
+      setPendingPurchaseId('')
     }
-    setEquippedItems(nextEquipped)
-    localStorage.setItem(EQUIPPED_KEY, JSON.stringify(nextEquipped))
-
-    const storedUser = JSON.parse(localStorage.getItem('user') || '{}')
-    localStorage.setItem('user', JSON.stringify({
-      ...storedUser,
-      tokenBalance: updatedBalance
-    }))
-
-    window.dispatchEvent(new CustomEvent('tokenBalanceUpdated', {
-      detail: { tokenBalance: updatedBalance }
-    }))
   }
 
   return (
@@ -249,10 +349,6 @@ const TheGarage = () => {
       <div className="garage-card">
         <h1>The Garage</h1>
         <p className="garage-subtitle">Spend your tokens to upgrade your car setup.</p>
-
-        <div className="garage-balance">
-          <strong>Available Tokens:</strong> {tokenBalance}
-        </div>
 
         {statusMessage && (
           <p className="garage-status" role="status">{statusMessage}</p>
@@ -279,10 +375,10 @@ const TheGarage = () => {
                           )}
                         </div>
                         <h3>{item.name}</h3>
-                        <p>Cost: {item.cost} tokens</p>
+                        <p>{isOwned ? 'Owned' : `Cost: ${item.cost} tokens`}</p>
                         <ul className="garage-item-effects">
                           {STAT_KEYS.map((key) => {
-                            const delta = Number(item.effects?.[key] || 0)
+                            const delta = getNetEffectDelta(sectionName, item, key)
                             if (delta === 0) return null
 
                             return (
@@ -297,9 +393,15 @@ const TheGarage = () => {
                           type="button"
                           className="garage-action"
                           onClick={() => handlePurchase(sectionName, item)}
-                          disabled={isOwned || !canAfford}
+                          disabled={isOwned || !canAfford || pendingPurchaseId === item.id}
                         >
-                          {isOwned ? 'Owned' : canAfford ? 'Purchase' : 'Not Enough Tokens'}
+                          {isOwned
+                            ? 'Owned'
+                            : pendingPurchaseId === item.id
+                              ? 'Purchasing...'
+                              : canAfford
+                                ? 'Purchase'
+                                : 'Not Enough Tokens'}
                         </button>
                         <button
                           type="button"
@@ -318,41 +420,45 @@ const TheGarage = () => {
 
             <section className="garage-section garage-coming-soon">
               <h2>Body</h2>
-              <p>Coming Soon - Work in Progress.</p>
+              <p>Coming Soon - Work in Progress...</p>
             </section>
           </div>
 
-          <aside className="garage-vehicle-column">
-            <h2>Current Vehicle</h2>
-            <div className="garage-vehicle-preview">
-              <img src={logo} alt={currentVehicleName} className="garage-vehicle-image" />
-            </div>
-            <p className="garage-vehicle-name">{currentVehicleName}</p>
+          <div className="garage-sidebar-column">
+            <aside className="garage-vehicle-column">
+              <h2>Current Vehicle</h2>
+              <p className="garage-vehicle-name">{currentVehicleName}</p>
 
-            <section className="garage-stats-panel" aria-label="Performance stats chart">
-              <h3>Performance Stats</h3>
-              <div className="garage-stats-chart">
-                {STAT_KEYS.map((key) => {
-                  const value = currentStats[key]
-                  return (
-                    <div key={key} className="garage-stat-row">
-                      <span className="garage-stat-label">{key}</span>
-                      <div className="garage-stat-track">
-                        <div
-                          className={`garage-stat-fill ${value >= 100 ? 'is-max' : ''}`}
-                          style={{ width: `${value}%` }}
-                          role="img"
-                          aria-label={`${key} ${value} out of 100`}
-                        />
+              <section className="garage-stats-panel" aria-label="Performance stats chart">
+                <h3>Performance Stats</h3>
+                <div className="garage-stats-chart">
+                  {STAT_KEYS.map((key) => {
+                    const value = currentStats[key]
+                    return (
+                      <div key={key} className="garage-stat-row">
+                        <span className="garage-stat-label">{key}</span>
+                        <div className="garage-stat-track">
+                          <div
+                            className={`garage-stat-fill ${value >= 100 ? 'is-max' : ''}`}
+                            style={{ width: `${value}%` }}
+                            role="img"
+                            aria-label={`${key} ${value} out of 100`}
+                          />
+                        </div>
+                        <span className="garage-stat-value">{value}</span>
                       </div>
-                      <span className="garage-stat-value">{value}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
-          </aside>
+                    )
+                  })}
+                </div>
+              </section>
+            </aside>
+
+            <div className="garage-balance">
+              <strong>Available Tokens:</strong> {tokenBalance}
+            </div>
+          </div>
         </div>
+
       </div>
     </div>
   )

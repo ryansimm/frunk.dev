@@ -45,6 +45,7 @@ const Challenges = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [submissionOutput, setSubmissionOutput] = useState('')
   const [answerChecked, setAnswerChecked] = useState(false)
   const [isCorrect, setIsCorrect] = useState(false)
   const [latestTokenAward, setLatestTokenAward] = useState(0)
@@ -147,6 +148,7 @@ const Challenges = () => {
 
     setIsLoading(true)
     setFeedback('')
+    setSubmissionOutput('')
     setAnswerChecked(false)
     setSelectedAnswer('')
     setCodeAnswer('')
@@ -265,6 +267,13 @@ const Challenges = () => {
       console.log('Code evaluation - Correct:', correct, 'Score:', evaluation.score)
 
       const normalisedScore = Number(evaluation?.score || 0)
+      const testCaseCount = Array.isArray(questionData?.testCases) ? questionData.testCases.length : 0
+      setSubmissionOutput([
+        `Score: ${normalisedScore}/100`,
+        `Status: ${correct ? 'All checks passed' : 'Needs more work'}`,
+        `Test cases checked: ${testCaseCount}`
+      ].join('\n'))
+
       if (normalisedScore === 100) {
         setFeedback('')
         return
@@ -284,6 +293,7 @@ const Challenges = () => {
       setFeedback(feedbackText)
     } catch (error) {
       console.error('Code evaluation error:', error)
+      setSubmissionOutput('Unable to evaluate this submission right now.')
       setFeedback('Error: ' + (error?.message || 'Could not evaluate code right now.'))
     } finally {
       setIsSubmitting(false)
@@ -626,6 +636,13 @@ const Challenges = () => {
                 {questionData?.questionType === 'knowledge' && (
                   <p>Key concepts: {questionData.correctKeywords?.join(', ') || 'General understanding'}</p>
                 )}
+              </div>
+            )}
+
+            {questionData?.questionType === 'freeCode' && submissionOutput && (
+              <div className="challenge-output">
+                <h4>Run Output</h4>
+                <p>{submissionOutput}</p>
               </div>
             )}
 
