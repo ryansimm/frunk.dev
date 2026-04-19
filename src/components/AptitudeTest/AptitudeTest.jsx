@@ -44,6 +44,7 @@ const AptitudeTest = ({ onTestComplete }) => {
   const [userCode, setUserCode] = useState(savedSession?.userCode || '');
   const [evaluation, setEvaluation] = useState(savedSession?.evaluation || null);
   const [answered, setAnswered] = useState(Boolean(savedSession?.answered));
+  const [showDetailedFeedback, setShowDetailedFeedback] = useState(Boolean(savedSession?.showDetailedFeedback));
   
   // Progress tracking
   const [questionHistory, setQuestionHistory] = useState(Array.isArray(savedSession?.questionHistory) ? savedSession.questionHistory : []);
@@ -76,6 +77,7 @@ const AptitudeTest = ({ onTestComplete }) => {
       userCode,
       evaluation,
       answered,
+      showDetailedFeedback,
       questionHistory,
       correctAnswers,
       askedTopics,
@@ -94,6 +96,7 @@ const AptitudeTest = ({ onTestComplete }) => {
     userCode,
     evaluation,
     answered,
+    showDetailedFeedback,
     questionHistory,
     correctAnswers,
     askedTopics,
@@ -135,6 +138,7 @@ const AptitudeTest = ({ onTestComplete }) => {
     setUserCode('');
     setEvaluation(null);
     setAnswered(false);
+    setShowDetailedFeedback(false);
     setQuestionHistory([]);
     setCorrectAnswers(0);
     setAskedTopics([]);
@@ -146,6 +150,7 @@ const AptitudeTest = ({ onTestComplete }) => {
     setLoadingQuestion(true);
     setEvaluation(null);
     setAnswered(false);
+    setShowDetailedFeedback(false);
     const topicsToAvoid = topicsOverride !== undefined ? topicsOverride : askedTopics;
     
     try {
@@ -178,6 +183,7 @@ const AptitudeTest = ({ onTestComplete }) => {
     }
 
     setEvaluation(null);
+    setShowDetailedFeedback(false);
     setEvaluatingCode(true);
     
     try {
@@ -248,6 +254,7 @@ const AptitudeTest = ({ onTestComplete }) => {
   const handleRetryQuestion = () => {
     setAnswered(false);
     setEvaluation(null);
+    setShowDetailedFeedback(false);
     setPendingNext(null);
     setUserCode(currentQuestion?.codeTemplate || '');
   };
@@ -689,7 +696,7 @@ const AptitudeTest = ({ onTestComplete }) => {
 
             {!evaluatingCode && !evaluation && (
               <div className="feedback-empty">
-                <p>Submit your code to see detailed feedback here.</p>
+                <p>Submit your code to see strengths, areas to improve, and optional detailed feedback.</p>
               </div>
             )}
 
@@ -702,13 +709,6 @@ const AptitudeTest = ({ onTestComplete }) => {
                   <span className="score-badge">Score: {evaluation.score}/100</span>
                 </div>
                 
-                {evaluation.feedback && (
-                  <div className="feedback">
-                    <h4>Feedback:</h4>
-                    <p>{evaluation.feedback}</p>
-                  </div>
-                )}
-
                 {evaluation.strengths && evaluation.strengths.length > 0 && (
                   <div className="strengths">
                     <h4>Strengths:</h4>
@@ -717,6 +717,25 @@ const AptitudeTest = ({ onTestComplete }) => {
                         <li key={i}>{strength}</li>
                       ))}
                     </ul>
+                  </div>
+                )}
+
+                {evaluation.feedback && (
+                  <div className="detailed-feedback-toggle">
+                    <button
+                      type="button"
+                      className="feedback-toggle-button"
+                      onClick={() => setShowDetailedFeedback((prev) => !prev)}
+                    >
+                      {showDetailedFeedback ? 'Hide In-Depth Feedback' : 'Show In-Depth Feedback'}
+                    </button>
+                  </div>
+                )}
+
+                {evaluation.feedback && showDetailedFeedback && (
+                  <div className="feedback">
+                    <h4>In-Depth Feedback:</h4>
+                    <p>{evaluation.feedback}</p>
                   </div>
                 )}
 

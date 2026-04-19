@@ -10,7 +10,7 @@ const SECTION_ITEMS = [
     image: ai_image,
     alt: 'Img for About the AI',
     title: 'About The AI',
-    description: 'This project makes use of Gemini 2.5 Flash and is prompt based. Gemini has be promted to provide the highest quality feedback to users for all questions without completing the issue for them.'
+    description: 'This project makes use of Gemini 2.5 Flash and is prompt based. Gemini has been promted to provide the highest quality feedback to users for all questions without simply providing the user with a quick fix, with the intent to help nurture learning instead of hindering.'
   },
   {
     id: 'how-to-use',
