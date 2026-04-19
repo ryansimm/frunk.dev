@@ -79,9 +79,21 @@
     .sections {
         flex-direction: column;
         width: min(92%, 560px);
+        gap: 16px;
     }
 
     .section {
         width: 100%;
+    }
+
+    .section-hover-box {
+        position: static;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        margin-top: 8px;
+        opacity: 1;
+        transform: none;
+        pointer-events: auto;
     }
 }
