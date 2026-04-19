@@ -13,7 +13,9 @@ import { createAuthRoutes } from './routes/authRoutes.js';
 import { createLearningRoutes } from './routes/learningRoutes.js';
 import { createAptitudeRoutes } from './routes/aptitudeRoutes.js';
 
-dotenv.config();
+if (process.env.NODE_ENV !== 'production') {
+    dotenv.config();
+}
 
 const PORT = process.env.PORT || 5000;
 
