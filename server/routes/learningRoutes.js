@@ -23,13 +23,28 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
         return words.slice(0, maxWords).join(' ');
     };
 
+    const ensureSentenceEnding = (text = '') => /[.!?]$/.test(text) ? text : `${text}.`;
+
     const limitChars = (text = '', maxChars = 180) => {
         const cleaned = stripMarkdown(text);
         if (cleaned.length <= maxChars) {
             return cleaned;
         }
 
-        return `${cleaned.slice(0, Math.max(0, maxChars - 3)).trim()}...`;
+        const clipped = cleaned.slice(0, maxChars).trim();
+        const sentenceEndIndexes = [clipped.lastIndexOf('. '), clipped.lastIndexOf('? '), clipped.lastIndexOf('! ')];
+        const bestSentenceEnd = Math.max(...sentenceEndIndexes);
+
+        if (bestSentenceEnd >= Math.floor(maxChars * 0.55)) {
+            return clipped.slice(0, bestSentenceEnd + 1).trim();
+        }
+
+        const lastSpace = clipped.lastIndexOf(' ');
+        if (lastSpace >= Math.floor(maxChars * 0.7)) {
+            return ensureSentenceEnding(clipped.slice(0, lastSpace).trim());
+        }
+
+        return ensureSentenceEnding(clipped);
     };
 
     const normaliseFreeCodeQuestion = (generatedData = {}) => {
@@ -38,10 +53,10 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
             : { input: 'example', expected: 'result' };
 
         const baseQuestion = stripMarkdown(generatedData.question || 'Write a Python function to solve this problem.');
-        const conciseQuestion = limitChars(baseQuestion, 170);
+        const conciseQuestion = limitChars(baseQuestion, 220);
         const withExample = conciseQuestion.includes('Example:')
             ? conciseQuestion
-            : limitChars(`${conciseQuestion} Example: ${String(firstTest.input)} -> ${String(firstTest.expected)}`, 180);
+            : limitChars(`${conciseQuestion} Example: ${String(firstTest.input)} -> ${String(firstTest.expected)}`, 240);
 
         const hints = Array.isArray(generatedData.hints) ? generatedData.hints : [];
         const normalisedHints = [
@@ -79,7 +94,7 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
 
         return {
             ...generatedData,
-            question: limitChars(generatedData.question || 'Explain the concept and give one practical example.', 180),
+            question: limitChars(generatedData.question || 'Explain the concept and give one practical example.', 220),
             correctKeywords: keywords.length > 0 ? keywords : ['concept', 'example', 'usage'],
             explanation: limitChars(generatedData.explanation || 'A good answer should define the concept and explain when to use it.', 150)
         };
@@ -105,7 +120,7 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
 
         return {
             ...generatedData,
-            question: limitChars(generatedData.question || 'Choose the best answer.', 170),
+            question: limitChars(generatedData.question || 'Choose the best answer.', 210),
             options: normalisedOptions,
             correctAnswer: normalisedCorrectAnswer,
             explanation: limitChars(generatedData.explanation || 'This option best matches Python behavior for the concept.', 140)
@@ -443,7 +458,7 @@ You are a Python question generator. Create a concise coding challenge. Always r
 Generate a ${safeDifficulty} difficulty free-response coding question about "${safeTopic}".${avoidClause}
 
 Keep the output brief and clear:
-- "question": maximum 2 short sentences, under 180 characters total.
+- "question": maximum 2 short sentences, under 230 characters total.
 - Use plain language. No long context, no story, no extra constraints.
 - Include exactly one simple example in the question text.
 - "hints": exactly 2 hints, each under 12 words.
@@ -477,7 +492,7 @@ You are a Python instructor creating conceptual questions to test deep understan
 Generate a ${safeDifficulty} difficulty knowledge-based question about "${safeTopic}". Ask the student to explain concepts, compare ideas, or analyse usage patterns.${avoidClause}
 
 Keep output concise:
-- "question": max 180 characters, 1-2 short sentences.
+- "question": max 220 characters, 1-2 short sentences.
 - "correctKeywords": 3-6 short items.
 - "explanation": max 140 characters.
 
@@ -506,7 +521,7 @@ You are a question generator. Create educational questions with multiple choice 
 Generate a ${safeDifficulty} difficulty multiple-choice question about "${safeTopic}".${avoidClause}
 
 Keep output concise:
-- "question": max 170 characters.
+- "question": max 210 characters.
 - each option: max 90 characters.
 - "explanation": max 140 characters.
 

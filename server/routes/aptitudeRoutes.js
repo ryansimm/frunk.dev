@@ -37,13 +37,28 @@ export function createAptitudeRoutes({
         return words.slice(0, maxWords).join(' ');
     };
 
+    const ensureSentenceEnding = (text = '') => /[.!?]$/.test(text) ? text : `${text}.`;
+
     const limitChars = (text = '', maxChars = 180) => {
         const cleaned = stripMarkdown(text);
         if (cleaned.length <= maxChars) {
             return cleaned;
         }
 
-        return `${cleaned.slice(0, Math.max(0, maxChars - 3)).trim()}...`;
+        const clipped = cleaned.slice(0, maxChars).trim();
+        const sentenceEndIndexes = [clipped.lastIndexOf('. '), clipped.lastIndexOf('? '), clipped.lastIndexOf('! ')];
+        const bestSentenceEnd = Math.max(...sentenceEndIndexes);
+
+        if (bestSentenceEnd >= Math.floor(maxChars * 0.55)) {
+            return clipped.slice(0, bestSentenceEnd + 1).trim();
+        }
+
+        const lastSpace = clipped.lastIndexOf(' ');
+        if (lastSpace >= Math.floor(maxChars * 0.7)) {
+            return ensureSentenceEnding(clipped.slice(0, lastSpace).trim());
+        }
+
+        return ensureSentenceEnding(clipped);
     };
 
     const normaliseAdaptiveQuestion = (generatedData = {}, difficulty = 'medium') => {
@@ -58,10 +73,10 @@ export function createAptitudeRoutes({
             ];
 
         const firstTest = testCases[0] || { input: 'example', expected: 'result' };
-        const baseQuestion = limitChars(generatedData.question || 'Write a Python function to solve this problem.', 170);
+        const baseQuestion = limitChars(generatedData.question || 'Write a Python function to solve this problem.', 220);
         const questionWithExample = baseQuestion.includes('Example:')
             ? baseQuestion
-            : limitChars(`${baseQuestion} Example: ${firstTest.input} -> ${firstTest.expected}`, 180);
+            : limitChars(`${baseQuestion} Example: ${firstTest.input} -> ${firstTest.expected}`, 240);
 
         const hints = Array.isArray(generatedData.hints) ? generatedData.hints : [];
 
@@ -116,7 +131,7 @@ Difficulty guidelines:
 This is question #${safeQuestionNumber} of 12. Each question must cover a DIFFERENT Python concept or problem type. Vary the problem style — use different data structures, algorithms, and problem domains each time.${avoidClause}
 
 Keep output concise:
-- "question": max 180 characters and include one short example.
+- "question": max 230 characters and include one short example.
 - "hints": exactly 2 hints, each <= 12 words.
 - "testCases": exactly 2 concise test cases.
 
