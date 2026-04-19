@@ -82,3 +82,27 @@ a{
 .button-start:hover .flag-icon {
     opacity:1;
 }
+
+@media (max-width: 900px) {
+    :root {
+        --navbar-height: 72px;
+    }
+
+    .container {
+        padding-left: 6%;
+        padding-right: 6%;
+    }
+
+    .container-2 {
+        padding-left: 4%;
+        padding-right: 4%;
+    }
+}
+
+@media (max-width: 540px) {
+    .button,
+    .button-start {
+        font-size: 14px;
+        padding: 12px 20px;
+    }
+}

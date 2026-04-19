@@ -56,3 +56,37 @@
 .home-garage-link:hover {
     opacity: 0.9;
 }
+
+@media (max-width: 900px) {
+    .background {
+        min-height: calc(100vh - var(--navbar-height));
+        padding-top: 30px;
+        padding-bottom: 80px;
+        align-items: flex-start;
+    }
+
+    .body-text h1 {
+        font-size: clamp(2rem, 7vw, 2.8rem);
+        line-height: 1.15;
+    }
+
+    .body-text p {
+        font-size: 1rem;
+        line-height: 1.55;
+    }
+}
+
+@media (max-width: 540px) {
+    .home-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .button-link {
+        width: 100%;
+    }
+
+    .button-link .button-start {
+        width: 100%;
+    }
+}
