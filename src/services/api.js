@@ -1,13 +1,15 @@
 import axios from "axios";
 
-// Use environment variable for API URL, fallback to localhost for local development
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+// Never use localhost in production; default to Render API unless explicitly overridden.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV
+    ? "http://localhost:5000/api"
+    : "https://honours-project-backend.onrender.com/api");
 
 const getAuthToken = () => localStorage.getItem('authToken') || '';
 
 const authHeaders = () => {
     const token = getAuthToken();
-    return token ? { Authorisation: `Bearer ${token}` } : {};
+    return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
 //registering a new user or logging in an existing user

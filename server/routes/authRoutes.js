@@ -80,7 +80,7 @@ export function createAuthRoutes({ db }) {
     }
 
     async function authenticateRequest(req, res, next) {
-        const header = req.headers.authorisation || '';
+        const header = req.headers.authorization || req.headers.authorisation || '';
         const token = header.startsWith('Bearer ') ? header.slice(7) : null;
 
         if (!token) {

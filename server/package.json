@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "migrate:atlas": "node scripts/migrateLocalToAtlas.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -18,6 +19,6 @@
     "mongodb": "^7.1.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "20.x"
   }
 }
