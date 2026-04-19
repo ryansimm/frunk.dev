@@ -5,7 +5,19 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV
     ? "http://localhost:5000/api"
     : "https://honours-project-backend.onrender.com/api");
 
-const getAuthToken = () => localStorage.getItem('authToken') || '';
+const getAuthToken = () => {
+    const directToken = localStorage.getItem('authToken') || '';
+    if (directToken) {
+        return directToken;
+    }
+
+    try {
+        const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+        return storedUser?.accessToken || storedUser?.token || '';
+    } catch {
+        return '';
+    }
+};
 
 const authHeaders = () => {
     const token = getAuthToken();

@@ -25,7 +25,10 @@ const Login = () => {
     try {
       const response = await apiService.login(email.trim(), password)
       localStorage.setItem('authToken', response.token)
-      localStorage.setItem('user', JSON.stringify(response.user))
+      localStorage.setItem('user', JSON.stringify({
+        ...response.user,
+        accessToken: response.token
+      }))
       window.dispatchEvent(new Event('authStateChanged'))
       navigate('/profile')
     } catch (loginError) {
