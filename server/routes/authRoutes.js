@@ -80,8 +80,11 @@ export function createAuthRoutes({ db }) {
     }
 
     async function authenticateRequest(req, res, next) {
-        const header = req.headers.authorization || req.headers.authorisation || '';
-        const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+        const header = req.headers.authorization
+            || req.headers.authorisation
+            || req.headers['x-access-token']
+            || '';
+        const token = header.startsWith('Bearer ') ? header.slice(7) : header;
 
         if (!token) {
             return res.status(401).json({ error: 'Authentication required' });

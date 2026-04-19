@@ -21,7 +21,11 @@ const getAuthToken = () => {
 
 const authHeaders = () => {
     const token = getAuthToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    return token ? {
+        Authorization: `Bearer ${token}`,
+        authorisation: `Bearer ${token}`,
+        'x-access-token': token
+    } : {};
 };
 
 //registering a new user or logging in an existing user
