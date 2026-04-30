@@ -619,7 +619,7 @@ const Challenges = () => {
               </>
             )}
 
-            {answerChecked && (
+            {answerChecked && !isSubmitting && (
               <div className={`challenge-result ${isCorrect ? 'correct' : 'incorrect'}`}>
                 <strong>{isCorrect ? '✓ Correct!' : '✗ Not quite yet'}</strong>
                 {latestTokenAward > 0 && <p>Tokens earned: +{latestTokenAward}</p>}
@@ -639,7 +639,7 @@ const Challenges = () => {
               </div>
             )}
 
-            {questionData?.questionType === 'freeCode' && submissionOutput && (
+            {questionData?.questionType === 'freeCode' && submissionOutput && !isSubmitting && (
               <div className="challenge-output">
                 <h4>Run Output</h4>
                 <p>{submissionOutput}</p>

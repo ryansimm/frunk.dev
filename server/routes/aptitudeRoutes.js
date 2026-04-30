@@ -24,6 +24,7 @@ export function createAptitudeRoutes({
 }) {
     const router = express.Router();
 
+    // Removes markdown formatting so generated text is cleaner for the frontend
     const stripMarkdown = (text = '') => String(text)
         .replace(/`+/g, '')
         .replace(/\*\*/g, '')
@@ -32,6 +33,7 @@ export function createAptitudeRoutes({
         .replace(/\s+/g, ' ')
         .trim();
 
+    // Keeps hints short so they are useful without giving too much away (point of the system is to guide)
     const limitWords = (text = '', maxWords = 12) => {
         const words = stripMarkdown(text).split(' ').filter(Boolean);
         return words.slice(0, maxWords).join(' ');
@@ -39,14 +41,20 @@ export function createAptitudeRoutes({
 
     const ensureSentenceEnding = (text = '') => /[.!?]$/.test(text) ? text : `${text}.`;
 
+    // Limits longer generated text while also trying to keep a clean sentence ending (instead of just cutting off)
     const limitChars = (text = '', maxChars = 180) => {
         const cleaned = stripMarkdown(text);
+
         if (cleaned.length <= maxChars) {
             return cleaned;
         }
 
         const clipped = cleaned.slice(0, maxChars).trim();
-        const sentenceEndIndexes = [clipped.lastIndexOf('. '), clipped.lastIndexOf('? '), clipped.lastIndexOf('! ')];
+        const sentenceEndIndexes = [
+            clipped.lastIndexOf('. '),
+            clipped.lastIndexOf('? '),
+            clipped.lastIndexOf('! ')
+        ];
         const bestSentenceEnd = Math.max(...sentenceEndIndexes);
 
         if (bestSentenceEnd >= Math.floor(maxChars * 0.55)) {
@@ -54,6 +62,7 @@ export function createAptitudeRoutes({
         }
 
         const lastSpace = clipped.lastIndexOf(' ');
+
         if (lastSpace >= Math.floor(maxChars * 0.7)) {
             return ensureSentenceEnding(clipped.slice(0, lastSpace).trim());
         }
@@ -61,6 +70,7 @@ export function createAptitudeRoutes({
         return ensureSentenceEnding(clipped);
     };
 
+    // Normalises the AI question so the frontend always receives the expected format
     const normaliseAdaptiveQuestion = (generatedData = {}, difficulty = 'medium') => {
         const testCases = Array.isArray(generatedData.testCases)
             ? generatedData.testCases.slice(0, 2).map((testCase) => ({
@@ -73,7 +83,11 @@ export function createAptitudeRoutes({
             ];
 
         const firstTest = testCases[0] || { input: 'example', expected: 'result' };
-        const baseQuestion = limitChars(generatedData.question || 'Write a Python function to solve this problem.', 220);
+        const baseQuestion = limitChars(
+            generatedData.question || 'Write a Python function to solve this problem.',
+            220
+        );
+
         const questionWithExample = baseQuestion.includes('Example:')
             ? baseQuestion
             : limitChars(`${baseQuestion} Example: ${firstTest.input} -> ${firstTest.expected}`, 240);
@@ -96,16 +110,20 @@ export function createAptitudeRoutes({
     router.post('/generate-adaptive-question', async (req, res) => {
         const { questionNumber, lastAnswerCorrect, currentDifficulty, userId, askedTopics = [] } = req.body;
 
+        // Sanitise the values before they are used in prompts or saved to the db
         const parsedQuestionNumber = Number.parseInt(questionNumber, 10);
         const safeQuestionNumber = Number.isFinite(parsedQuestionNumber)
             ? Math.max(1, Math.min(12, parsedQuestionNumber))
             : 1;
+
         const safeCurrentDifficulty = toSafeEnum(currentDifficulty, ['easy', 'medium', 'hard'], 'medium');
         const safeLastAnswerCorrect = Boolean(lastAnswerCorrect);
+
         const safeAskedTopics = sanitiseStringList(askedTopics, {
             maxItems: 12,
             maxItemChars: 60
         });
+
         const safeUserId = sanitisePromptValue(userId, {
             fallback: 'anonymous',
             maxChars: 64,
@@ -114,7 +132,13 @@ export function createAptitudeRoutes({
         });
 
         const startTime = Date.now();
-        const nextDifficulty = resolveNextDifficulty(safeQuestionNumber, safeLastAnswerCorrect, safeCurrentDifficulty);
+
+        // Difficulty is calculated on the server 
+        const nextDifficulty = resolveNextDifficulty(
+            safeQuestionNumber,
+            safeLastAnswerCorrect,
+            safeCurrentDifficulty
+        );
 
         const avoidClause = safeAskedTopics.length > 0
             ? `\n\nIMPORTANT: Do NOT reuse or closely resemble any of these already-asked topics: ${safeAskedTopics.join(', ')}. Pick a completely different concept.`
@@ -149,7 +173,7 @@ Return ONLY valid JSON in this exact format:
             const { json: questionData, modelName } = await generateJsonWithFallback(prompt, jsonModels);
             const responseTime = Date.now() - startTime;
 
-            // Always use server-computed difficulty — never trust the AI-returned value
+            // Always use the server-computed difficulty dont trust the AI-returned value
             const safeQuestion = normaliseAdaptiveQuestion(questionData, nextDifficulty);
 
             const dbEntry = {
@@ -171,7 +195,13 @@ Return ONLY valid JSON in this exact format:
             });
         } catch (error) {
             console.error('Adaptive question error:', error);
-            const fallbackQuestion = getFallbackAdaptiveQuestion(nextDifficulty || safeCurrentDifficulty || 'medium', safeQuestionNumber);
+
+            // If AI generation fails, return a local fallback question so the test can continue
+            const fallbackQuestion = getFallbackAdaptiveQuestion(
+                nextDifficulty || safeCurrentDifficulty || 'medium',
+                safeQuestionNumber
+            );
+
             res.json({
                 ...fallbackQuestion,
                 responseTime: Date.now() - startTime,
@@ -184,29 +214,35 @@ Return ONLY valid JSON in this exact format:
         const { userCode, question, difficulty, testCases, userId, codeTemplate } = req.body;
         const startTime = Date.now();
 
+        // Clean all prompt inputs before sending anything to the model
         const safeDifficulty = toSafeEnum(difficulty, ['easy', 'medium', 'hard'], 'medium');
+
         const safeQuestion = sanitisePromptValue(question, {
             fallback: 'No question provided.',
             maxChars: 600,
             trim: true,
             collapseWhitespace: false
         });
+
         const safeUserCode = sanitisePromptValue(userCode, {
             fallback: '',
             maxChars: 9000,
             trim: true,
             collapseWhitespace: false
         });
+
         const safeCodeTemplate = sanitisePromptValue(codeTemplate, {
             fallback: '',
             maxChars: 2000,
             trim: true,
             collapseWhitespace: false
         });
+
         const safeTestCaseData = sanitiseTestCases(testCases, {
             maxCases: 6,
             maxFieldChars: 180
         });
+
         const safeUserId = sanitisePromptValue(userId, {
             fallback: 'anonymous',
             maxChars: 64,
@@ -261,7 +297,15 @@ Rules:
 - Be strict and conservative with scoring.`;
 
             const { json: rawEvaluationData } = await generateJsonWithFallback(prompt, jsonModels);
-            const evaluationData = normaliseEvaluationResult(rawEvaluationData, safeUserCode, safeCodeTemplate, safeDifficulty);
+
+            // Normalise the model result before using it for scoring or tokens
+            const evaluationData = normaliseEvaluationResult(
+                rawEvaluationData,
+                safeUserCode,
+                safeCodeTemplate,
+                safeDifficulty
+            );
+
             const { tokenAward, tokenBreakdown } = calculateTokenAward({
                 evaluationData,
                 difficulty: safeDifficulty,
@@ -271,7 +315,9 @@ Rules:
             const responseTime = Date.now() - startTime;
             let tokenBalance = null;
 
+            // Only update the token value if a valid user id was provided
             const parsedUserId = parseOptionalUserId(safeUserId);
+
             if (parsedUserId) {
                 const userUpdate = await db.collection('users').findOneAndUpdate(
                     { _id: parsedUserId },
@@ -308,15 +354,24 @@ Rules:
             });
         } catch (error) {
             console.error('Code evaluation error:', error);
-            const fallbackEvaluation = getFallbackEvaluation(safeUserCode, safeCodeTemplate, safeDifficulty);
+
+            // Fallback that still gives the user a result and awards tokens consistently
+            const fallbackEvaluation = getFallbackEvaluation(
+                safeUserCode,
+                safeCodeTemplate,
+                safeDifficulty
+            );
+
             const { tokenAward, tokenBreakdown } = calculateTokenAward({
                 evaluationData: fallbackEvaluation,
                 difficulty: safeDifficulty,
                 userCode: safeUserCode
             });
+
             let tokenBalance = null;
 
             const parsedUserId = parseOptionalUserId(safeUserId);
+
             if (parsedUserId) {
                 const userUpdate = await db.collection('users').findOneAndUpdate(
                     { _id: parsedUserId },
@@ -352,6 +407,7 @@ Rules:
 
         try {
             const parsedUserId = parseOptionalUserId(userId);
+
             const payload = {
                 userId: userId || 'anonymous',
                 ...results,
@@ -362,6 +418,7 @@ Rules:
 
             let tokenBalance = null;
 
+            // Mark the aptitude test as complete for logged-in users
             if (parsedUserId) {
                 const userUpdate = await db.collection('users').findOneAndUpdate(
                     { _id: parsedUserId },
@@ -399,7 +456,13 @@ Rules:
         try {
             const user = await db.collection('users').findOne(
                 { _id: toObjectId(userId) },
-                { projection: { tokenBalance: 1, totalTokensEarned: 1, totalTokensSpent: 1 } }
+                {
+                    projection: {
+                        tokenBalance: 1,
+                        totalTokensEarned: 1,
+                        totalTokensSpent: 1
+                    }
+                }
             );
 
             if (!user) {
@@ -410,7 +473,10 @@ Rules:
                 tokenBalance: user.tokenBalance || 0,
                 totalTokensEarned: user.totalTokensEarned || 0,
                 totalTokensSpent: user.totalTokensSpent || 0,
-                availableTokens: Math.max(0, Number(user.totalTokensEarned || 0) - Number(user.totalTokensSpent || 0))
+                availableTokens: Math.max(
+                    0,
+                    Number(user.totalTokensEarned || 0) - Number(user.totalTokensSpent || 0)
+                )
             });
         } catch (error) {
             console.error('Failed to fetch token balance:', error);

@@ -7,9 +7,20 @@ import {
     toSafeEnum
 } from '../utils/promptSafety.js';
 
-export function createLearningRoutes({ db, generateTextWithModel, generateTextWithFallback, generateJsonWithFallback, jsonModels, getFallbackMcqQuestion, getFallbackKnowledgeQuestion, getFallbackAdaptiveQuestion, parseOptionalUserId }) {
+export function createLearningRoutes({
+    db,
+    generateTextWithModel,
+    generateTextWithFallback,
+    generateJsonWithFallback,
+    jsonModels,
+    getFallbackMcqQuestion,
+    getFallbackKnowledgeQuestion,
+    getFallbackAdaptiveQuestion,
+    parseOptionalUserId
+}) {
     const router = express.Router();
 
+    // Removes markdown so generated text displays cleanly in the frontend
     const stripMarkdown = (text = '') => String(text)
         .replace(/`+/g, '')
         .replace(/\*\*/g, '')
@@ -18,6 +29,7 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
         .replace(/\s+/g, ' ')
         .trim();
 
+    // Keeps hints short and avoids giving away too much detail
     const limitWords = (text = '', maxWords = 12) => {
         const words = stripMarkdown(text).split(' ').filter(Boolean);
         return words.slice(0, maxWords).join(' ');
@@ -25,14 +37,20 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
 
     const ensureSentenceEnding = (text = '') => /[.!?]$/.test(text) ? text : `${text}.`;
 
+    // Clips longer AI text while trying to keep it readable
     const limitChars = (text = '', maxChars = 180) => {
         const cleaned = stripMarkdown(text);
+
         if (cleaned.length <= maxChars) {
             return cleaned;
         }
 
         const clipped = cleaned.slice(0, maxChars).trim();
-        const sentenceEndIndexes = [clipped.lastIndexOf('. '), clipped.lastIndexOf('? '), clipped.lastIndexOf('! ')];
+        const sentenceEndIndexes = [
+            clipped.lastIndexOf('. '),
+            clipped.lastIndexOf('? '),
+            clipped.lastIndexOf('! ')
+        ];
         const bestSentenceEnd = Math.max(...sentenceEndIndexes);
 
         if (bestSentenceEnd >= Math.floor(maxChars * 0.55)) {
@@ -40,6 +58,7 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
         }
 
         const lastSpace = clipped.lastIndexOf(' ');
+
         if (lastSpace >= Math.floor(maxChars * 0.7)) {
             return ensureSentenceEnding(clipped.slice(0, lastSpace).trim());
         }
@@ -47,6 +66,7 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
         return ensureSentenceEnding(clipped);
     };
 
+    // Normalises free-code questions so the frontend always gets the same structure
     const normaliseFreeCodeQuestion = (generatedData = {}) => {
         const firstTest = Array.isArray(generatedData.testCases) && generatedData.testCases.length > 0
             ? generatedData.testCases[0]
@@ -54,11 +74,13 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
 
         const baseQuestion = stripMarkdown(generatedData.question || 'Write a Python function to solve this problem.');
         const conciseQuestion = limitChars(baseQuestion, 220);
+
         const withExample = conciseQuestion.includes('Example:')
             ? conciseQuestion
             : limitChars(`${conciseQuestion} Example: ${String(firstTest.input)} -> ${String(firstTest.expected)}`, 240);
 
         const hints = Array.isArray(generatedData.hints) ? generatedData.hints : [];
+
         const normalisedHints = [
             limitWords(hints[0] || 'Break the problem into small steps.', 12),
             limitWords(hints[1] || 'Test with a simple example first.', 12)
@@ -84,6 +106,7 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
         };
     };
 
+    // Normalises knowledge questions and keeps keyword lists short
     const normaliseKnowledgeQuestion = (generatedData = {}) => {
         const keywords = Array.isArray(generatedData.correctKeywords)
             ? generatedData.correctKeywords
@@ -100,6 +123,7 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
         };
     };
 
+    // Normalises MCQs so there are always 4 options and a valid correct answer
     const normaliseMcqQuestion = (generatedData = {}) => {
         const options = Array.isArray(generatedData.options)
             ? generatedData.options.slice(0, 4).map((option) => limitChars(option, 90))
@@ -127,13 +151,16 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
         };
     };
 
+    // Converts a comma-separated string into a small keyword array
     const parseKeywordList = (value = '') => String(value)
         .split(',')
         .map((item) => item.trim())
         .filter(Boolean);
 
+    // Shortens answers before putting them into fallback feedback text
     const getAnswerExcerpt = (answer = '', maxChars = 90) => {
         const cleaned = stripMarkdown(answer);
+
         if (cleaned.length <= maxChars) {
             return cleaned;
         }
@@ -141,6 +168,7 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
         return `${cleaned.slice(0, Math.max(0, maxChars - 3)).trim()}...`;
     };
 
+    // Local feedback to be used when the AI model is unavailable
     const buildFallbackFeedback = ({ questionType, userAnswer, correctAnswer, questionText }) => {
         const answer = String(userAnswer || '').trim();
         const normalisedType = (questionType || 'mcq').toLowerCase();
@@ -155,6 +183,7 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
             if (keywords.length > 0) {
                 const matchedText = matched.length > 0 ? matched.slice(0, 2).join(', ') : 'none yet';
                 const missedText = missed.length > 0 ? missed.join(', ') : 'edge cases and practical application';
+
                 return `Good effort. From your answer ("${excerpt}"), you covered ${matched.length}/${keywords.length} key ideas. Strongest concepts: ${matchedText}. To improve, explicitly include: ${missedText}, then connect them to one concrete Python use case.`;
             }
 
@@ -180,6 +209,7 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
             const strengthsText = strengths.length > 0
                 ? `Your code ${strengths.join(', ')}.`
                 : 'Your submission is a good start.';
+
             const improvementsText = improvements.length > 0
                 ? `Next step: ${improvements.join('; ')}.`
                 : 'Next step: test against edge cases (empty input, minimal input, repeated values).';
@@ -187,7 +217,10 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
             return `${strengthsText} ${improvementsText}`;
         }
 
-        const isCorrectMcq = String(userAnswer || '').trim() && String(correctAnswer || '').trim() && String(userAnswer).trim() === String(correctAnswer).trim();
+        const isCorrectMcq = String(userAnswer || '').trim()
+            && String(correctAnswer || '').trim()
+            && String(userAnswer).trim() === String(correctAnswer).trim();
+
         if (isCorrectMcq) {
             return 'Correct answer. Nice work identifying the right option. To go further, explain why each other option is less accurate.';
         }
@@ -198,19 +231,23 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
     router.post('/feedback', async (req, res) => {
         const { userAnswer, correctAnswer, questionText, userId, questionType } = req.body;
 
+        // Sanitise the user inputs before using them in prompts or storing logs
         const safeQuestionType = toSafeEnum(questionType, ['knowledge', 'freecode', 'mcq'], 'mcq');
+
         const safeUserAnswer = sanitisePromptValue(userAnswer, {
             fallback: '',
             maxChars: 3500,
             trim: true,
             collapseWhitespace: false
         });
+
         const safeQuestionText = sanitisePromptValue(questionText, {
             fallback: '',
             maxChars: 600,
             trim: true,
             collapseWhitespace: false
         });
+
         const safeCorrectAnswer = sanitisePromptValue(correctAnswer, {
             fallback: '',
             maxChars: 1200,
@@ -237,6 +274,7 @@ export function createLearningRoutes({ db, generateTextWithModel, generateTextWi
                         collapseWhitespace: true
                     }))
                     .filter(Boolean);
+
                 const answerLower = safeUserAnswer.toLowerCase();
                 const matchedKeywords = parsedKeywords.filter((keyword) => answerLower.includes(keyword.toLowerCase()));
                 const missingKeywords = parsedKeywords.filter((keyword) => !answerLower.includes(keyword.toLowerCase()));
@@ -279,7 +317,7 @@ ${asUntrustedInputBlock('Correct or Expected Code', safeCorrectAnswer || 'Not pr
 
 Provide specific, constructive feedback on their code.`;
             } else {
-                // MCQ default
+                // MCQ feedback is the default option
                 prompt = `${PROMPT_INJECTION_GUARDRAIL}
 
 You are a supportive tutor providing constructive feedback. The student selected an answer to a multiple choice question.
@@ -310,7 +348,9 @@ Provide specific, constructive feedback explaining why their answer was correct 
                 usedFallback = true;
                 modelUsed = 'local-fallback';
                 modelErrorMessage = modelError?.message || 'Unknown model error';
+
                 console.warn('Feedback model failed, using fallback feedback:', modelError.message);
+
                 feedback = buildFallbackFeedback({
                     questionType: safeQuestionType,
                     userAnswer: safeUserAnswer,
@@ -322,6 +362,7 @@ Provide specific, constructive feedback explaining why their answer was correct 
             const responseTime = Date.now() - startTime;
 
             try {
+                // Feedback logs are useful for evaluation, but should not block the response
                 await db.collection('feedback_logs').insertOne({
                     userId: userId || 'anonymous',
                     questionType: safeQuestionType,
@@ -339,15 +380,21 @@ Provide specific, constructive feedback explaining why their answer was correct 
                 console.warn('Failed to write feedback log:', dbError.message);
             }
 
-            res.json({ feedback, responseTime, fallback: usedFallback });
+            res.json({
+                feedback,
+                responseTime,
+                fallback: usedFallback
+            });
         } catch (error) {
             console.error('Feedback error:', error);
+
             const fallbackFeedback = buildFallbackFeedback({
                 questionType: safeQuestionType,
                 userAnswer: safeUserAnswer,
                 correctAnswer: safeCorrectAnswer,
                 questionText: safeQuestionText
             });
+
             res.json({
                 feedback: fallbackFeedback,
                 responseTime: Date.now() - startTime,
@@ -362,6 +409,7 @@ Provide specific, constructive feedback explaining why their answer was correct 
         const normalisedType = (questionType || 'mcq').toLowerCase();
         const normalisedDifficulty = (difficulty || 'easy').toLowerCase();
 
+        // Token rewards are based on question type, difficulty, and correctness
         const baseByType = {
             mcq: 3,
             knowledge: 4,
@@ -383,6 +431,7 @@ Provide specific, constructive feedback explaining why their answer was correct 
 
         try {
             const parsedUserId = parseOptionalUserId ? parseOptionalUserId(userId) : null;
+
             if (parsedUserId) {
                 const userUpdate = await db.collection('users').findOneAndUpdate(
                     { _id: parsedUserId },
@@ -398,6 +447,7 @@ Provide specific, constructive feedback explaining why their answer was correct 
                 tokenBalance = userUpdate?.value?.tokenBalance ?? userUpdate?.tokenBalance ?? null;
             }
 
+            // Store a separate token event for later analysis
             await db.collection('challenge_token_awards').insertOne({
                 userId: userId || 'anonymous',
                 questionType: normalisedType,
@@ -425,8 +475,10 @@ Provide specific, constructive feedback explaining why their answer was correct 
             trim: true,
             collapseWhitespace: true
         });
+
         const safeDifficulty = toSafeEnum(difficulty, ['easy', 'medium', 'hard'], 'medium');
         const safeQuestionType = toSafeEnum(questionType, ['freecode', 'knowledge', 'mcq'], 'mcq');
+
         const safeAskedTopics = sanitiseStringList(askedTopics, {
             maxItems: 12,
             maxItemChars: 60
@@ -437,6 +489,7 @@ Provide specific, constructive feedback explaining why their answer was correct 
         }
 
         console.log(`\n📌 [CHALLENGE QUESTION] Generating ${safeQuestionType} (${safeDifficulty}) on topic: "${safeTopic}"`);
+
         const startTime = Date.now();
         let usedFallback = false;
 
@@ -444,14 +497,14 @@ Provide specific, constructive feedback explaining why their answer was correct 
             let prompt;
             let questionData;
 
-            // Build exclusion clause if there are previously asked topics
+            // Avoid repeating topics already asked during the aptitude test
             const avoidClause = safeAskedTopics.length > 0
                 ? `\n\nIMPORTANT: These topics have already been covered in their aptitude test, so create something DIFFERENT: ${safeAskedTopics.join(', ')}. Make sure this new question covers a fresh angle or concept.`
                 : '';
 
             if (safeQuestionType === 'freecode') {
-                // Generate free-code question with code template, hints, and test cases
-                                prompt = `${PROMPT_INJECTION_GUARDRAIL}
+                // Generate a free-code question with a template, hints and test cases
+                prompt = `${PROMPT_INJECTION_GUARDRAIL}
 
 You are a Python question generator. Create a concise coding challenge. Always respond with valid JSON only, no additional text.
 
@@ -474,18 +527,24 @@ Return ONLY valid JSON in this exact format:
   "explanation": "Explanation of the solution approach"
 }`;
 
-                console.log('📝 Attempting to generate freeCode question via AI...', { topic: safeTopic, difficulty: safeDifficulty });
+                console.log('Attempting to generate freeCode question via AI...', {
+                    topic: safeTopic,
+                    difficulty: safeDifficulty
+                });
+
                 const { json: generatedData, modelName: model } = await generateJsonWithFallback(prompt, jsonModels);
                 console.log('✅ Successfully generated freeCode question', { model });
+
                 const normalisedData = normaliseFreeCodeQuestion(generatedData);
+
                 questionData = {
                     ...normalisedData,
                     questionType: 'freeCode',
                     model
                 };
             } else if (safeQuestionType === 'knowledge') {
-                // Generate knowledge-based question
-                                prompt = `${PROMPT_INJECTION_GUARDRAIL}
+                // Generate a conceptual question rather than a coding task
+                prompt = `${PROMPT_INJECTION_GUARDRAIL}
 
 You are a Python instructor creating conceptual questions to test deep understanding (not syntax). Always respond with valid JSON only, no additional text.
 
@@ -503,17 +562,23 @@ Return ONLY valid JSON in this exact format:
   "explanation": "What a good answer should include"
 }`;
 
-                console.log('📝 Attempting to generate knowledge question via AI...', { topic: safeTopic, difficulty: safeDifficulty });
+                console.log('Attempting to generate knowledge question via AI...', {
+                    topic: safeTopic,
+                    difficulty: safeDifficulty
+                });
+
                 const { json: generatedData, modelName: model } = await generateJsonWithFallback(prompt, jsonModels);
                 console.log('✅ Successfully generated knowledge question', { model });
+
                 const normalisedData = normaliseKnowledgeQuestion(generatedData);
+
                 questionData = {
                     ...normalisedData,
                     questionType: 'knowledge',
                     model
                 };
             } else {
-                // MCQ (default)
+                // MCQ is the default question type
                 prompt = `${PROMPT_INJECTION_GUARDRAIL}
 
 You are a question generator. Create educational questions with multiple choice options. Always respond with valid JSON only, no additional text.
@@ -533,10 +598,19 @@ Return ONLY valid JSON in this exact format:
   "explanation": "Why this is the correct answer"
 }`;
 
-                console.log('📝 Attempting to generate MCQ via AI...', { topic: safeTopic, difficulty: safeDifficulty });
+                console.log('Attempting to generate MCQ via AI...', {
+                    topic: safeTopic,
+                    difficulty: safeDifficulty
+                });
+
                 const { json: generatedData, modelName: model } = await generateJsonWithFallback(prompt, jsonModels);
-                console.log('✅ Successfully generated MCQ', { model, responseTime: `${Date.now() - startTime}ms` });
+                console.log('✅ Successfully generated MCQ', {
+                    model,
+                    responseTime: `${Date.now() - startTime}ms`
+                });
+
                 const normalisedData = normaliseMcqQuestion(generatedData);
+
                 questionData = {
                     ...normalisedData,
                     questionType: 'mcq',
@@ -559,7 +633,13 @@ Return ONLY valid JSON in this exact format:
 
             const insertResult = await db.collection('questions').insertOne(dbEntry);
 
-            console.log('✨ Successfully generated AI question:', { topic: safeTopic, questionType: safeQuestionType, usedFallback: false, responseTime, model: questionData.model });
+            console.log('Successfully generated AI question:', {
+                topic: safeTopic,
+                questionType: safeQuestionType,
+                usedFallback: false,
+                responseTime,
+                model: questionData.model
+            });
 
             res.json({
                 ...questionData,
@@ -568,7 +648,7 @@ Return ONLY valid JSON in this exact format:
                 generatedByAI: true
             });
         } catch (error) {
-            console.error('❌ Question generation error:', {
+            console.error('Question generation error:', {
                 message: error.message,
                 stack: error.stack,
                 topic: safeTopic,
@@ -576,8 +656,9 @@ Return ONLY valid JSON in this exact format:
                 questionType: safeQuestionType
             });
 
-            // Fallback based on question type
+            // Use the matching fallback question type if generation fails
             let fallbackQuestion;
+
             if (safeQuestionType === 'freecode') {
                 fallbackQuestion = getFallbackAdaptiveQuestion(safeDifficulty, 1);
                 fallbackQuestion.questionType = 'freeCode';
@@ -590,7 +671,15 @@ Return ONLY valid JSON in this exact format:
             }
 
             usedFallback = true;
-            console.log('📦 Using fallback question for topic:', safeTopic, 'type:', safeQuestionType, 'error:', error.message);
+
+            console.log(
+                'Using fallback question for topic:',
+                safeTopic,
+                'type:',
+                safeQuestionType,
+                'error:',
+                error.message
+            );
 
             res.json({
                 ...fallbackQuestion,

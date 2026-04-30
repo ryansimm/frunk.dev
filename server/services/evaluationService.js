@@ -1,11 +1,22 @@
+/**
+ * https://medium.com/@manojkumartech/code-evaluation-using-ai-and-rule-based-systems-3b0d5b6f8c9d
+ * https://medium.com/@rajat19/automated-code-review-using-static-analysis-in-javascript-1f0d3c5a7cbb
+ * https://stackoverflow.com/questions/140131/check-if-a-string-contains-a-substring-in-javascript
+ * https://stackoverflow.com/questions/1183903/regex-to-match-a-function-definition
+ * These references cover heuristic based code evaluation (for the rule based scoring)
+ * Detecting patterns in code, using regex and combining AI evaluation with fallback logic
+ * Token/reward calculation based on the user performance.
+ */
+// Normalises code so it can be compared against a template without formatting differences
 function normaliseCodeForTemplateComparison(code) {
     return (code || '')
-        .replace(/#.*$/gm, '')
-        .replace(/\s+/g, '')
+        .replace(/#.*$/gm, '') // remove comments
+        .replace(/\s+/g, '')   // remove whitespace
         .trim()
         .toLowerCase();
 }
 
+// Checks if user submission is basically unchanged from the template
 function isSubmissionNearTemplate(userCode, codeTemplate) {
     if (!codeTemplate) {
         return false;
@@ -21,6 +32,7 @@ function isSubmissionNearTemplate(userCode, codeTemplate) {
     return normalisedUser === normalisedTemplate;
 }
 
+// Removes placeholder/template lines like "pass" or "# your code here"
 function stripTemplateScaffoldArtifacts(userCode, codeTemplate) {
     if (!codeTemplate) {
         return userCode || '';
@@ -39,16 +51,21 @@ function stripTemplateScaffoldArtifacts(userCode, codeTemplate) {
         .split('\n')
         .filter((line) => {
             const normalised = line.trim().toLowerCase();
+
             if (!normalised) {
                 return true;
             }
 
-            const isScaffoldLine = scaffoldTokens.has(normalised) && templateLineSet.has(normalised);
+            const isScaffoldLine =
+                scaffoldTokens.has(normalised) &&
+                templateLineSet.has(normalised);
+
             return !isScaffoldLine;
         })
         .join('\n');
 }
 
+// Sets a minimum score threshold for correct answers based on difficulty
 function getCorrectnessScoreFloor(difficulty) {
     const level = (difficulty || 'easy').toLowerCase();
     if (level === 'hard') return 92;
@@ -56,6 +73,93 @@ function getCorrectnessScoreFloor(difficulty) {
     return 84;
 }
 
+function clampScore(score) {
+    const numericScore = Number(score);
+    if (!Number.isFinite(numericScore)) {
+        return 0;
+    }
+
+    return Math.max(0, Math.min(100, Math.round(numericScore)));
+}
+
+function normaliseStringList(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value
+        .map((item) => String(item || '').trim())
+        .filter(Boolean);
+}
+
+export function normaliseEvaluationResult(rawEvaluationData, userCode, codeTemplate, difficulty) {
+    const fallbackEvaluation = getFallbackEvaluation(userCode, codeTemplate, difficulty);
+    const raw = rawEvaluationData && typeof rawEvaluationData === 'object' ? rawEvaluationData : {};
+
+    const score = clampScore(raw.score ?? fallbackEvaluation.score);
+    const isCorrect = typeof raw.isCorrect === 'boolean'
+        ? raw.isCorrect
+        : score >= getCorrectnessScoreFloor(difficulty);
+
+    const feedback = String(raw.feedback || fallbackEvaluation.feedback || '')
+        .trim() || fallbackEvaluation.feedback;
+
+    const issues = normaliseStringList(raw.issues);
+    const strengths = normaliseStringList(raw.strengths);
+
+    return {
+        isCorrect,
+        score,
+        feedback,
+        issues: issues.length > 0 ? issues : fallbackEvaluation.issues,
+        strengths: strengths.length > 0 ? strengths : fallbackEvaluation.strengths,
+        difficulty: (difficulty || 'unknown').toLowerCase(),
+        rawEvaluationData,
+        fallback: !rawEvaluationData
+    };
+}
+
+export function calculateTokenAward({ evaluationData, difficulty, userCode }) {
+    const safeDifficulty = (difficulty || 'easy').toLowerCase();
+    const score = clampScore(evaluationData?.score);
+    const isCorrect = Boolean(evaluationData?.isCorrect);
+    const codeLength = String(userCode || '').trim().length;
+
+    const baseByDifficulty = {
+        easy: 6,
+        medium: 8,
+        hard: 10
+    };
+
+    const difficultyFactor = {
+        easy: 1,
+        medium: 1.4,
+        hard: 1.8
+    };
+
+    const base = baseByDifficulty[safeDifficulty] ?? baseByDifficulty.easy;
+    const difficultyMultiplier = difficultyFactor[safeDifficulty] ?? difficultyFactor.easy;
+    const scoreFactor = Math.max(0.25, score / 100);
+    const completenessFactor = codeLength >= 180 ? 1.15 : codeLength >= 100 ? 1 : 0.85;
+    const correctnessFactor = isCorrect ? 1 : 0.5;
+
+    const tokenAward = Math.max(1, Math.round(base * difficultyMultiplier * scoreFactor * completenessFactor * correctnessFactor));
+
+    return {
+        tokenAward,
+        tokenBreakdown: {
+            base,
+            difficultyMultiplier,
+            scoreFactor,
+            completenessFactor,
+            correctnessFactor,
+            score,
+            isCorrect
+        }
+    };
+}
+
+// Builds structured feedback string for frontend display
 function buildDetailedFeedback({ feedback, score, difficulty, issues, strengths, isCorrect }) {
     const normalisedFeedback = (feedback || '').trim();
     const topStrengths = (strengths || []).slice(0, 3);
@@ -85,9 +189,13 @@ function buildDetailedFeedback({ feedback, score, difficulty, issues, strengths,
     ].join('\n');
 }
 
+// Fallback evaluation used when AI evaluation is unavailable
 export function getFallbackEvaluation(userCode, codeTemplate, difficulty) {
     const code = (userCode || '').trim();
+
+    // Remove template placeholders before analysing
     const nonTemplateCode = stripTemplateScaffoldArtifacts(code, codeTemplate).trim();
+
     const hasCode = code.length > 0;
     const hasDef = /\bdef\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(/.test(code);
     const hasReturn = /\breturn\b/.test(code);
@@ -96,6 +204,7 @@ export function getFallbackEvaluation(userCode, codeTemplate, difficulty) {
     const hasUsefulOps = /\bsort\b|\bsorted\b|\bappend\b|\bcount\b|\bdict\b|\bset\b|\blen\b/.test(code);
     const hasComprehension = /\[[^\]]+\bfor\b[^\]]+\]|\{[^}]+\bfor\b[^}]+\}/.test(code);
     const hasErrorHandling = /\btry\b[\s\S]*\bexcept\b/.test(code);
+
     const isEasy = (difficulty || 'easy').toLowerCase() === 'easy';
     const isTemplateOnly = isSubmissionNearTemplate(code, codeTemplate);
 
@@ -115,6 +224,7 @@ export function getFallbackEvaluation(userCode, codeTemplate, difficulty) {
 
     let score = 0;
 
+    // Basic scoring based on structure + features
     if (hasDef) {
         score += 20;
         strengths.push('Provides a function-based solution format.');
@@ -129,6 +239,7 @@ export function getFallbackEvaluation(userCode, codeTemplate, difficulty) {
         issues.push('Missing return logic for final output.');
     }
 
+    // Length heuristic (rough completeness check)
     if (code.length >= 180) {
         score += 20;
         strengths.push('Shows substantial implementation detail.');
@@ -155,6 +266,7 @@ export function getFallbackEvaluation(userCode, codeTemplate, difficulty) {
         strengths.push('Includes basic error handling.');
     }
 
+    // Penalise incomplete/template solutions
     if (hasPlaceholder) {
         score = Math.min(score, 12);
         issues.push('Contains placeholder or incomplete logic (e.g., pass/TODO).');
@@ -165,6 +277,7 @@ export function getFallbackEvaluation(userCode, codeTemplate, difficulty) {
         issues.push('Submission is still almost the same as the provided template scaffold.');
     }
 
+    // Harder questions require more logic
     if (!isEasy && !hasControlFlow && code.length < 160) {
         score = Math.min(score, 35);
         issues.push('Missing clear algorithmic steps beyond structure/template.');
@@ -196,155 +309,5 @@ export function getFallbackEvaluation(userCode, codeTemplate, difficulty) {
         issues,
         strengths,
         fallback: true
-    };
-}
-
-export function normaliseEvaluationResult(evaluationData, userCode, codeTemplate, difficulty) {
-    const code = (userCode || '').trim();
-    const nonTemplateCode = stripTemplateScaffoldArtifacts(code, codeTemplate).trim();
-    const hasDef = /\bdef\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(/.test(code);
-    const hasReturn = /\breturn\b/.test(code);
-    const hasPlaceholder = /\bpass\b|todo|your code here/i.test(nonTemplateCode);
-    const isVeryShort = nonTemplateCode.length < 40;
-    const hasControlFlow = /\bfor\b|\bwhile\b|\bif\b|\belif\b|\btry\b/.test(code);
-    const hasDataOps = /\bsort\b|\bsorted\b|\bappend\b|\bcount\b|\bdict\b|\bset\b|\blen\b|\bany\b|\ball\b|\benumerate\b|\bzip\b/.test(code);
-    const hasComprehension = /\[[^\]]+\bfor\b[^\]]+\]|\{[^}]+\bfor\b[^}]+\}/.test(code);
-    const isEasy = (difficulty || 'easy').toLowerCase() === 'easy';
-    const isTemplateOnly = isSubmissionNearTemplate(code, codeTemplate);
-
-    let score = Number.isFinite(Number(evaluationData?.score)) ? Number(evaluationData.score) : 0;
-    score = Math.max(0, Math.min(100, score));
-
-    const issues = Array.isArray(evaluationData?.issues)
-        ? evaluationData.issues.filter(Boolean)
-        : [];
-    const strengths = Array.isArray(evaluationData?.strengths)
-        ? evaluationData.strengths.filter(Boolean)
-        : [];
-
-    if (!hasDef) {
-        issues.push('Uses a non-standard function structure for this question format.');
-    }
-
-    if (!hasReturn) {
-        issues.push('May rely on side effects/printing instead of explicit return values.');
-    }
-
-    if (hasPlaceholder) {
-        issues.push('Contains placeholder/incomplete code (pass/TODO).');
-    }
-
-    if (isVeryShort) {
-        issues.push('Very short implementation; check edge cases carefully.');
-    }
-
-    if (isTemplateOnly) {
-        issues.push('Submission mostly matches scaffold/template.');
-    }
-
-    if (!isEasy && !hasControlFlow && code.length < 160) {
-        issues.push('Limited visible algorithmic control flow for this difficulty.');
-    }
-
-    if (!isEasy && !hasDataOps && !hasComprehension) {
-        issues.push('Limited visible data-processing operations for this difficulty.');
-    }
-
-    if (score < 90 && issues.length < 2) {
-        issues.push('Add explicit handling for edge cases (empty input, single-item input, and repeated values) and verify expected outputs for each.');
-    }
-
-    if (score < 90 && issues.length < 2) {
-        issues.push('Improve correctness confidence by testing additional cases and tightening logic around boundary conditions.');
-    }
-
-    if (score >= 90 && score < 100 && issues.length === 0) {
-        issues.push('For a higher score, refine readability and include clearer handling/comments for tricky edge-case branches.');
-    }
-
-    if (!Array.isArray(evaluationData?.strengths) || evaluationData.strengths.length === 0) {
-        score = Math.min(score, 78);
-    }
-
-    const feedbackText = String(evaluationData?.feedback || '').toLowerCase();
-    const feedbackSuggestsImprovements = /\b(improv|should|could|consider|missing|issue|fix|edge case|not handle)\b/.test(feedbackText);
-
-    // A perfect score must not include corrective guidance.
-    if (score === 100 && (issues.length > 0 || feedbackSuggestsImprovements)) {
-        score = 99;
-    }
-
-    const modelMarkedCorrect = Boolean(evaluationData?.isCorrect);
-
-    if (modelMarkedCorrect) {
-        score = Math.max(score, getCorrectnessScoreFloor(difficulty));
-    }
-
-    // Enforce a minimum correctness threshold by score.
-    const isCorrect = modelMarkedCorrect || score >= 40;
-
-    const isPerfectSubmission = score === 100 && issues.length === 0;
-    const finalFeedback = isPerfectSubmission
-        ? ''
-        : buildDetailedFeedback({
-            feedback: evaluationData?.feedback,
-            score,
-            difficulty,
-            issues,
-            strengths,
-            isCorrect
-        });
-
-    return {
-        isCorrect,
-        score,
-        feedback: finalFeedback,
-        issues,
-        strengths
-    };
-}
-
-function resolveDifficultyMultiplier(difficulty) {
-    const level = (difficulty || 'easy').toLowerCase();
-    if (level === 'hard') return 1.5;
-    if (level === 'medium') return 1.2;
-    return 1;
-}
-
-export function calculateTokenAward({ evaluationData, difficulty, userCode }) {
-    const score = Number.isFinite(Number(evaluationData?.score)) ? Number(evaluationData.score) : 0;
-    const issuesCount = Array.isArray(evaluationData?.issues) ? evaluationData.issues.length : 0;
-    const strengthsCount = Array.isArray(evaluationData?.strengths) ? evaluationData.strengths.length : 0;
-    const isCorrect = Boolean(evaluationData?.isCorrect);
-    const code = (userCode || '').trim();
-
-    const hasErrorHandling = /\btry\b[\s\S]*\bexcept\b/i.test(code);
-    const hasEfficientPatterns = /(\{.*for.*in.*\}|\[.*for.*in.*\]|\bset\(|\bdict\(|\bany\(|\ball\(|\benumerate\(|\bzip\()/i.test(code);
-    const isLikelyOverlyLong = code.length > 800;
-
-    const baseFromScore = Math.round((score / 100) * 14);
-    const correctnessBonus = isCorrect ? 4 : 0;
-    const difficultyScaled = Math.round((baseFromScore + correctnessBonus) * resolveDifficultyMultiplier(difficulty));
-    const qualityBonus = Math.min(3, strengthsCount);
-    const issuePenalty = Math.min(5, issuesCount);
-    const efficiencyBonus = hasEfficientPatterns ? 2 : 0;
-    const errorHandlingBonus = hasErrorHandling ? 1 : 0;
-    const lengthPenalty = isLikelyOverlyLong ? 2 : 0;
-
-    const raw = difficultyScaled + qualityBonus + efficiencyBonus + errorHandlingBonus - issuePenalty - lengthPenalty;
-    const tokenAward = Math.max(0, Math.min(30, raw));
-
-    return {
-        tokenAward,
-        tokenBreakdown: {
-            baseFromScore,
-            correctnessBonus,
-            difficultyMultiplier: resolveDifficultyMultiplier(difficulty),
-            qualityBonus,
-            efficiencyBonus,
-            errorHandlingBonus,
-            issuePenalty,
-            lengthPenalty
-        }
     };
 }

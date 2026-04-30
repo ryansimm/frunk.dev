@@ -6,13 +6,17 @@ import { ObjectId } from 'mongodb';
 
 export function createAuthRoutes({ db }) {
     const router = express.Router();
+
+    // Environment values with local development fallbacks
     const jwtSecret = process.env.JWT_SECRET || 'development-only-secret';
     const adminEmail = process.env.ADMIN_EMAIL || 'admin@ai-platform.local';
     const adminPassword = process.env.ADMIN_PASSWORD || 'ChangeMeNow123!';
     const adminName = process.env.ADMIN_NAME || 'Platform Admin';
 
+    // Seed the admin account once when the auth routes are created
     const seedAdminPromise = seedAdminAccount();
 
+    // Creates a JSON Web Token (JWT) containing the basic user information needed by the app
     function createAuthToken(user) {
         return jwt.sign(
             {
@@ -26,6 +30,7 @@ export function createAuthRoutes({ db }) {
         );
     }
 
+    // Removes sensitive fields before returning user data to the frontend
     function sanitiseUser(user) {
         return {
             userId: user._id.toString(),
@@ -39,6 +44,7 @@ export function createAuthRoutes({ db }) {
         };
     }
 
+    // Ensures that there is always an admin account available for creating users (details found in .env file)
     async function seedAdminAccount() {
         const existingAdmin = await db.collection('users').findOne({ email: adminEmail });
 
@@ -55,7 +61,11 @@ export function createAuthRoutes({ db }) {
 
             if (Object.keys(updates).length > 0) {
                 updates.updatedAt = new Date();
-                await db.collection('users').updateOne({ _id: existingAdmin._id }, { $set: updates, $unset: { password: '' } });
+
+                await db.collection('users').updateOne(
+                    { _id: existingAdmin._id },
+                    { $set: updates, $unset: { password: '' } }
+                );
             }
 
             return;
@@ -79,11 +89,13 @@ export function createAuthRoutes({ db }) {
         console.log(`Seeded admin account: ${adminEmail}`);
     }
 
+    // Checks the request for a valid JWT before allowing protected routes
     async function authenticateRequest(req, res, next) {
         const header = req.headers.authorization
             || req.headers.authorisation
             || req.headers['x-access-token']
             || '';
+
         const token = header.startsWith('Bearer ') ? header.slice(7) : header;
 
         if (!token) {
@@ -99,6 +111,7 @@ export function createAuthRoutes({ db }) {
         }
     }
 
+    // Used on routes that should only be available to admins
     function requireAdmin(req, res, next) {
         if (req.auth?.role !== 'admin') {
             return res.status(403).json({ error: 'Admin access required' });
@@ -109,6 +122,7 @@ export function createAuthRoutes({ db }) {
 
     router.post('/auth/register', authenticateRequest, requireAdmin, async (req, res) => {
         await seedAdminPromise;
+
         const { email, password, name } = req.body;
 
         if (!email || !password || !name) {
@@ -117,6 +131,7 @@ export function createAuthRoutes({ db }) {
 
         try {
             const existingUser = await db.collection('users').findOne({ email });
+
             if (existingUser) {
                 return res.status(400).json({ error: 'User already exists' });
             }
@@ -151,6 +166,7 @@ export function createAuthRoutes({ db }) {
 
     router.post('/auth/login', async (req, res) => {
         await seedAdminPromise;
+
         const { email, password } = req.body;
 
         if (!email || !password) {
@@ -169,11 +185,12 @@ export function createAuthRoutes({ db }) {
             if (user.passwordHash) {
                 passwordMatches = await bcrypt.compare(password, user.passwordHash);
             } else if (user.password) {
-                // Legacy migration path: convert plain-text password to hash after first successful login.
+                // Migration path for older users that still have a plain-text password
                 passwordMatches = user.password === password;
 
                 if (passwordMatches) {
                     const passwordHash = await bcrypt.hash(password, 10);
+
                     await db.collection('users').updateOne(
                         { _id: user._id },
                         {
@@ -181,6 +198,7 @@ export function createAuthRoutes({ db }) {
                             $unset: { password: '' }
                         }
                     );
+
                     user.passwordHash = passwordHash;
                     delete user.password;
                 }
@@ -204,9 +222,10 @@ export function createAuthRoutes({ db }) {
         }
     });
 
-    // Admin-authenticated signup endpoint.
+    // Admin-authenticated signup endpoint
     router.post('/auth/signup', authenticateRequest, requireAdmin, async (req, res) => {
         await seedAdminPromise;
+
         const { email, password, name } = req.body;
 
         if (!email || !password || !name) {
@@ -219,6 +238,7 @@ export function createAuthRoutes({ db }) {
 
         try {
             const existingUser = await db.collection('users').findOne({ email });
+
             if (existingUser) {
                 return res.status(400).json({ error: 'Email already registered' });
             }
@@ -259,11 +279,13 @@ export function createAuthRoutes({ db }) {
                 return res.status(404).json({ error: 'User not found' });
             }
 
+            // Get the latest aptitude result for displaying user progress
             const latestResult = await db.collection('aptitude_results').findOne(
                 { userId: user._id.toString() },
                 { sort: { createdAt: -1 } }
             );
 
+            // Total aptitude questions attempted and answered correctly
             const [aptitudeTotals = { attempted: 0, correct: 0 }] = await db.collection('aptitude_results')
                 .aggregate([
                     { $match: { userId: user._id.toString() } },
@@ -277,6 +299,7 @@ export function createAuthRoutes({ db }) {
                 ])
                 .toArray();
 
+            // Total challenge submissions attempted and answered correctly
             const [challengeTotals = { attempted: 0, correct: 0 }] = await db.collection('challenge_token_awards')
                 .aggregate([
                     { $match: { userId: user._id.toString() } },
@@ -323,6 +346,8 @@ export function createAuthRoutes({ db }) {
 
         try {
             const userObjectId = new ObjectId(req.auth.sub);
+
+            // Only spend tokens if the user has enough balance
             const updateResult = await db.collection('users').findOneAndUpdate(
                 {
                     _id: userObjectId,
@@ -339,6 +364,7 @@ export function createAuthRoutes({ db }) {
             );
 
             const updatedUser = updateResult?.value ?? updateResult;
+
             if (!updatedUser) {
                 return res.status(400).json({ error: 'Insufficient token balance' });
             }
@@ -346,6 +372,7 @@ export function createAuthRoutes({ db }) {
             const totalTokensEarned = Number(updatedUser.totalTokensEarned || 0);
             const totalTokensSpent = Number(updatedUser.totalTokensSpent || 0);
 
+            // Store a spend event so purchases can be tracked later
             await db.collection('token_spend_events').insertOne({
                 userId: updatedUser._id.toString(),
                 amount,
